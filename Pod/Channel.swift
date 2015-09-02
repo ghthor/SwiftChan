@@ -115,6 +115,23 @@ public class chan<V>: SendChannel, RecvChannel {
 		}
 	}
 
+	public func canSend(value: V) -> Bool {
+		var receiver: WaitForSend<V>?
+
+		dispatch_sync(q) {
+			if self.waitingForSendQ.count > 0 {
+				receiver = self.waitingForSendQ.removeAtIndex(0)
+			}
+		}
+
+		if let r = receiver {
+			r.send(value)
+			return true
+		}
+
+		return false
+	}
+
 	public func recv() -> V {
 		var sender: WaitForRecv<V>?
 		var receiver: WaitForSend<V>?
@@ -134,6 +151,22 @@ public class chan<V>: SendChannel, RecvChannel {
 			return receiver!.waitForSender()
 		}
 	}
+
+	public func canRecv() -> (V?, Bool) {
+		var sender: WaitForRecv<V>?
+
+		dispatch_sync(q) {
+			if self.waitingForRecvQ.count > 0 {
+				sender = self.waitingForRecvQ.removeAtIndex(0)
+			}
+		}
+
+		if let s = sender {
+			return (s.recv(), true)
+		}
+
+		return (nil, false)
+	}
 }
 
 public struct SendOnlyChan<C: SendChannel>: SendChannel {
@@ -142,6 +175,10 @@ public struct SendOnlyChan<C: SendChannel>: SendChannel {
 	public func send(value: C.ValueType) {
 		ch.send(value)
 	}
+
+	public func canSend(value: C.ValueType) -> Bool {
+		return ch.canSend(value)
+	}
 }
 
 public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
@@ -149,6 +186,10 @@ public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
 
 	public func recv() -> C.ValueType {
 		return ch.recv()
+	}
+
+	public func canRecv() -> (C.ValueType?, Bool) {
+		return ch.canRecv()
 	}
 }
 
@@ -199,11 +240,13 @@ public class BufferedChan<V>: chan<V> {
 public protocol SendChannel {
 	typealias ValueType
 	func send(value: ValueType)
+	func canSend(value: ValueType) -> Bool
 }
 
 public protocol RecvChannel {
 	typealias ValueType
 	func recv() -> ValueType
+	func canRecv() -> (ValueType?, Bool)
 }
 
 public struct ASyncRecv<V> {
