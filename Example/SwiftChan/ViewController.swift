@@ -7,12 +7,18 @@
 //
 
 import UIKit
+import SwiftChan
 
 class ViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
+		let app = <-applicationCh
+
+		ASyncRecv { (name) in
+			println(name)
+		} <- applicationNameCh
     }
 
     override func didReceiveMemoryWarning() {

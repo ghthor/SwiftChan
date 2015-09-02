@@ -8,6 +8,12 @@
 
 import UIKit
 
+private let appCh = chan<UIApplication>()
+private let appNameCh = chan<String>()
+
+let applicationCh = appCh.asRecvOnly()
+let applicationNameCh = appNameCh.asRecvOnly()
+
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
@@ -15,7 +21,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 
     func application(application: UIApplication, didFinishLaunchingWithOptions launchOptions: [NSObject: AnyObject]?) -> Bool {
-        // Override point for customization after application launch.
+		go {
+			while true {
+				appCh.asSendOnly() <- application
+			}
+		}
+
+		go {
+			while true {
+				appNameCh.asSendOnly() <- "SwiftChan Example"
+			}
+		}
         return true
     }
 
