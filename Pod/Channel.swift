@@ -29,25 +29,17 @@ public func gomain(@autoclosure routine: () -> ()) {
 	gomain(routine)
 }
 
-
 private class WaitForSend<V> {
-	private let group = dispatch_group_create()
 	private let sema = dispatch_semaphore_create(0)
 
 	private var v: V!
 
-	init() {
-		dispatch_group_enter(group)
-	}
-
 	private func send(value: V) {
-		dispatch_group_wait(group, DISPATCH_TIME_FOREVER)
 		v = value
 		dispatch_semaphore_signal(sema)
 	}
 
 	private func waitForSender() -> V {
-		dispatch_group_leave(group)
 		dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER)
 
 		return v
@@ -55,25 +47,21 @@ private class WaitForSend<V> {
 }
 
 private class WaitForRecv<V> {
-	private let group = dispatch_group_create()
 	private let sema = dispatch_semaphore_create(0)
 
 	private let v: V
 
 	init(value: V) {
-		dispatch_group_enter(group)
 		v = value
 	}
 
 	private func recv() -> V {
-		dispatch_group_wait(group, DISPATCH_TIME_FOREVER)
 		dispatch_semaphore_signal(sema)
 
 		return v
 	}
 
 	private func waitForRecv() {
-		dispatch_group_leave(group)
 		dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER)
 	}
 }
