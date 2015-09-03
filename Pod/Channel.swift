@@ -29,82 +29,152 @@ public func gomain(@autoclosure routine: () -> ()) {
 	gomain(routine)
 }
 
-private class WaitForSend<V> {
-	private var v: V!
+public class SyncedComm<V> {
+	private let sender = dispatch_group_create()
+	private let receiver = dispatch_group_create()
 
-	private let waiting = dispatch_group_create()
-	private let sending = dispatch_group_create()
-	private var sendAborted: Bool = false
+	// Sychronizes read/write of the has[Sender|Receiver] variables
+	let q: dispatch_queue_t = {
+		let uuid = NSUUID().UUIDString
+		return dispatch_queue_create("org.eksdyne.SyncedComm.\(uuid)", DISPATCH_QUEUE_SERIAL)
+	}()
 
-	init() {
-		dispatch_group_enter(sending)
-		dispatch_group_enter(waiting)
-	}
+	let readyCallback: (SyncedComm<V>) -> ()
 
-	private func maybeSend(value: V) -> Bool {
-		dispatch_group_leave(waiting)
-		dispatch_group_wait(sending, DISPATCH_TIME_FOREVER)
-
-		if !sendAborted {
-			v = value
-			dispatch_group_leave(self.waiting)
-			return true
-		}
-
-		dispatch_group_enter(self.waiting)
-		return false
-	}
-
-	private func waitForMaybeSender() -> (Bool) -> V? {
-		dispatch_group_wait(waiting, DISPATCH_TIME_FOREVER)
-
-		return { (proceed) -> V? in
-			self.sendAborted = !proceed
-			dispatch_group_enter(self.waiting)
-			dispatch_group_leave(self.sending)
-
-			if proceed {
-				dispatch_group_wait(self.waiting, DISPATCH_TIME_FOREVER)
-				return self.v
-			} else {
-				return nil
+	private var hasSender: Bool = false {
+		didSet {
+			if hasSender && hasReceiver {
+				readyCallback(self)
 			}
 		}
+	}
+
+	private var hasReceiver: Bool = false {
+		didSet {
+			if hasSender && hasReceiver {
+				readyCallback(self)
+			}
+		}
+	}
+
+	var v: V?
+	var canceled: Bool?
+	var senderCanceled: Bool?
+	var receiverCanceled: Bool?
+
+	init(onReady: (SyncedComm<V>) -> ()) {
+		readyCallback = onReady
+		enter()
+	}
+
+	private func enter() {
+		dispatch_group_enter(sender)
+		dispatch_group_enter(receiver)
+	}
+
+	var leaveOnce = dispatch_once_t()
+
+	private func leave() {
+		dispatch_once(&leaveOnce) {
+			dispatch_group_leave(self.sender)
+			dispatch_group_leave(self.receiver)
+		}
+	}
+
+	// Returns true if the communication went through
+	private func senderEnter(v: V) -> Bool {
+		self.v = v
+		dispatch_sync(q) { self.hasSender = true }
+		dispatch_group_wait(sender, DISPATCH_TIME_FOREVER)
+		if canceled! {
+			return false
+		}
+
+		return true
+	}
+
+	// Returns true if the communication went through
+	private func receiverEnter() -> (V?, Bool) {
+		dispatch_sync(q) { self.hasReceiver = true }
+		dispatch_group_wait(receiver, DISPATCH_TIME_FOREVER)
+		if canceled! {
+			return (nil, false)
+		}
+
+		return (v, true)
+	}
+
+	func ready() -> Bool {
+		var ready: Bool = false
+		dispatch_sync(q) { ready = self.hasSender && self.hasReceiver }
+		return ready
+	}
+
+	// Returns true if the Comm was canceled
+	func cancel() -> Bool {
+		var canceled: Bool?
+		dispatch_sync(q) {
+			if self.canceled == nil {
+				self.canceled = true
+				self.leave()
+			}
+
+			canceled = self.canceled
+		}
+
+
+		return !(canceled!)
+	}
+
+	// Returns true if the Comm was executed
+	func proceed() -> Bool {
+		var canceled: Bool?
+		dispatch_sync(q) {
+			if self.canceled == nil {
+				self.canceled = false
+				self.leave()
+			}
+
+			canceled = self.canceled
+		}
+
+
+		return !(canceled!)
+	}
+}
+
+private class WaitForSend<V> {
+	private let comm: SyncedComm<V>
+
+	init() {
+		comm = SyncedComm<V> { (comm) in
+			go { comm.proceed() }
+		}
+	}
+
+	private func send(v: V) -> Bool {
+		return comm.senderEnter(v)
+	}
+
+	private func waitForSender() -> (V?, Bool) {
+		return comm.receiverEnter()
 	}
 }
 
 private class WaitForRecv<V> {
-	private let v: V
-	private var recvAborted: Bool = false
-
-	private let waiting = dispatch_group_create()
-	private let receiving = dispatch_group_create()
-
-	init(value: V) {
-		v = value
-		dispatch_group_enter(waiting)
-		dispatch_group_enter(receiving)
+	private let comm: SyncedComm<V>
+	init() {
+		comm = SyncedComm<V> { (comm) in
+			go { comm.proceed() }
+		}
 	}
 
-	private func maybeRecv() -> V? {
-		dispatch_group_leave(waiting)
-		dispatch_group_wait(receiving, DISPATCH_TIME_FOREVER)
-
-		if recvAborted {
-			return nil
-		}
-
-		return v
-
+	private func recv() -> (V?, Bool) {
+		return comm.receiverEnter()
 	}
 
-	private func waitForMaybeRecv() -> (Bool) -> () {
-		dispatch_group_wait(waiting, DISPATCH_TIME_FOREVER)
-
-		return { (proceed) in
-			self.recvAborted = !proceed
-			dispatch_group_leave(self.receiving)
-		}
+	private func waitForRecv(v: V) -> Bool {
+		return comm.senderEnter(v)
 	}
 }
 
@@ -125,63 +195,59 @@ public class chan<V>: SendChannel, RecvChannel {
 		return SendOnlyChan<chan<V>>(ch: self)
 	}
 
-	private func trySend(v: V) -> Bool {
-		if waitingForSendQ.count > 0 {
-			let receiver = self.waitingForSendQ.removeAtIndex(0)
-			if receiver.maybeSend(v) {
-				return true
-			} else {
-				return trySend(v)
-			}
-		}
-
-		return false
-	}
-
 	public func send(v: V) {
+		var receiver: WaitForSend<V>?
 		var sender: WaitForRecv<V>?
 
 		dispatch_sync(q) {
-			if !self.trySend(v) {
-				sender = WaitForRecv<V>(value: v)
+			if self.waitingForSendQ.count > 0 {
+				receiver = self.waitingForSendQ.removeAtIndex(0)
+			} else {
+				sender = WaitForRecv<V>()
 				self.waitingForRecvQ.append(sender!)
 			}
 		}
 
-		if let sender = sender {
-			sender.waitForMaybeRecv()(true)
-		}
-	}
+		if let receiver = receiver {
+			if !receiver.send(v) {
+				send(v)
+			}
 
-	private func tryRecv() -> V? {
-		if waitingForRecvQ.count > 0 {
-			let sender = waitingForRecvQ.removeAtIndex(0)
-			if let v = sender.maybeRecv() {
-				return v
-			} else {
-				return tryRecv()
+		} else {
+			if sender!.waitForRecv(v) {
+				send(v)
 			}
 		}
-
-		return nil
 	}
 
 	public func recv() -> V {
-		var v: V?
+		var sender: WaitForRecv<V>?
 		var receiver: WaitForSend<V>?
 
 		dispatch_sync(q) {
-			v = self.tryRecv()
-			if v == nil {
+			if self.waitingForRecvQ.count > 0 {
+				sender = self.waitingForRecvQ.removeAtIndex(0)
+			} else {
 				receiver = WaitForSend<V>()
 				self.waitingForSendQ.append(receiver!)
 			}
 		}
 
-		if v != nil {
-			return v!
+		if let sender = sender {
+			let (v, _) = sender.recv()
+			if v == nil {
+				return recv()
+			} else {
+				return v!
+			}
+
 		} else {
-			return receiver!.waitForMaybeSender()(true)!
+			let (v, _) = receiver!.waitForSender()
+			if v == nil {
+				return recv()
+			} else {
+				return v!
+			}
 		}
 	}
 }
