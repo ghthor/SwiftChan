@@ -30,39 +30,81 @@ public func gomain(@autoclosure routine: () -> ()) {
 }
 
 private class WaitForSend<V> {
-	private let sema = dispatch_semaphore_create(0)
-
 	private var v: V!
 
-	private func send(value: V) {
-		v = value
-		dispatch_semaphore_signal(sema)
+	private let waiting = dispatch_group_create()
+	private let sending = dispatch_group_create()
+	private var sendAborted: Bool = false
+
+	init() {
+		dispatch_group_enter(sending)
+		dispatch_group_enter(waiting)
 	}
 
-	private func waitForSender() -> V {
-		dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER)
+	private func maybeSend(value: V) -> Bool {
+		dispatch_group_leave(waiting)
+		dispatch_group_wait(sending, DISPATCH_TIME_FOREVER)
 
-		return v
+		if !sendAborted {
+			v = value
+			dispatch_group_leave(self.waiting)
+			return true
+		}
+
+		dispatch_group_enter(self.waiting)
+		return false
+	}
+
+	private func waitForMaybeSender() -> (Bool) -> V? {
+		dispatch_group_wait(waiting, DISPATCH_TIME_FOREVER)
+
+		return { (proceed) -> V? in
+			self.sendAborted = !proceed
+			dispatch_group_enter(self.waiting)
+			dispatch_group_leave(self.sending)
+
+			if proceed {
+				dispatch_group_wait(self.waiting, DISPATCH_TIME_FOREVER)
+				return self.v
+			} else {
+				return nil
+			}
+		}
 	}
 }
 
 private class WaitForRecv<V> {
-	private let sema = dispatch_semaphore_create(0)
-
 	private let v: V
+	private var recvAborted: Bool = false
+
+	private let waiting = dispatch_group_create()
+	private let receiving = dispatch_group_create()
 
 	init(value: V) {
 		v = value
+		dispatch_group_enter(waiting)
+		dispatch_group_enter(receiving)
 	}
 
-	private func recv() -> V {
-		dispatch_semaphore_signal(sema)
+	private func maybeRecv() -> V? {
+		dispatch_group_leave(waiting)
+		dispatch_group_wait(receiving, DISPATCH_TIME_FOREVER)
+
+		if recvAborted {
+			return nil
+		}
 
 		return v
+
 	}
 
-	private func waitForRecv() {
-		dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER)
+	private func waitForMaybeRecv() -> (Bool) -> () {
+		dispatch_group_wait(waiting, DISPATCH_TIME_FOREVER)
+
+		return { (proceed) in
+			self.recvAborted = !proceed
+			dispatch_group_leave(self.receiving)
+		}
 	}
 }
 
@@ -83,77 +125,64 @@ public class chan<V>: SendChannel, RecvChannel {
 		return SendOnlyChan<chan<V>>(ch: self)
 	}
 
-	public func send(v: V) {
-		var receiver: WaitForSend<V>?
-		var sender: WaitForRecv<V>?
-
-		dispatch_sync(q) {
-			if self.waitingForSendQ.count > 0 {
-				receiver = self.waitingForSendQ.removeAtIndex(0)
+	private func trySend(v: V) -> Bool {
+		if waitingForSendQ.count > 0 {
+			let receiver = self.waitingForSendQ.removeAtIndex(0)
+			if receiver.maybeSend(v) {
+				return true
 			} else {
-				sender = WaitForRecv<V>(value: v)
-				self.waitingForRecvQ.append(sender!)
+				return trySend(v)
 			}
-		}
-
-		if receiver != nil {
-			receiver!.send(v)
-		} else {
-			sender!.waitForRecv()
-		}
-	}
-
-	public func canSend(value: V) -> Bool {
-		var receiver: WaitForSend<V>?
-
-		dispatch_sync(q) {
-			if self.waitingForSendQ.count > 0 {
-				receiver = self.waitingForSendQ.removeAtIndex(0)
-			}
-		}
-
-		if let r = receiver {
-			r.send(value)
-			return true
 		}
 
 		return false
 	}
 
-	public func recv() -> V {
+	public func send(v: V) {
 		var sender: WaitForRecv<V>?
+
+		dispatch_sync(q) {
+			if !self.trySend(v) {
+				sender = WaitForRecv<V>(value: v)
+				self.waitingForRecvQ.append(sender!)
+			}
+		}
+
+		if let sender = sender {
+			sender.waitForMaybeRecv()(true)
+		}
+	}
+
+	private func tryRecv() -> V? {
+		if waitingForRecvQ.count > 0 {
+			let sender = waitingForRecvQ.removeAtIndex(0)
+			if let v = sender.maybeRecv() {
+				return v
+			} else {
+				return tryRecv()
+			}
+		}
+
+		return nil
+	}
+
+	public func recv() -> V {
+		var v: V?
 		var receiver: WaitForSend<V>?
 
 		dispatch_sync(q) {
-			if self.waitingForRecvQ.count > 0 {
-				sender = self.waitingForRecvQ.removeAtIndex(0)
-			} else {
+			v = self.tryRecv()
+			if v == nil {
 				receiver = WaitForSend<V>()
 				self.waitingForSendQ.append(receiver!)
 			}
 		}
 
-		if sender != nil {
-			return sender!.recv()
+		if v != nil {
+			return v!
 		} else {
-			return receiver!.waitForSender()
+			return receiver!.waitForMaybeSender()(true)!
 		}
-	}
-
-	public func canRecv() -> (V?, Bool) {
-		var sender: WaitForRecv<V>?
-
-		dispatch_sync(q) {
-			if self.waitingForRecvQ.count > 0 {
-				sender = self.waitingForRecvQ.removeAtIndex(0)
-			}
-		}
-
-		if let s = sender {
-			return (s.recv(), true)
-		}
-
-		return (nil, false)
 	}
 }
 
@@ -162,11 +191,7 @@ public struct SendOnlyChan<C: SendChannel>: SendChannel {
 
 	public func send(value: C.ValueType) {
 		ch.send(value)
-	}
-
-	public func canSend(value: C.ValueType) -> Bool {
-		return ch.canSend(value)
-	}
+				}
 }
 
 public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
@@ -174,10 +199,6 @@ public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
 
 	public func recv() -> C.ValueType {
 		return ch.recv()
-	}
-
-	public func canRecv() -> (C.ValueType?, Bool) {
-		return ch.canRecv()
 	}
 }
 
@@ -228,13 +249,11 @@ public class BufferedChan<V>: chan<V> {
 public protocol SendChannel {
 	typealias ValueType
 	func send(value: ValueType)
-	func canSend(value: ValueType) -> Bool
 }
 
 public protocol RecvChannel {
 	typealias ValueType
 	func recv() -> ValueType
-	func canRecv() -> (ValueType?, Bool)
 }
 
 public struct ASyncRecv<V> {
