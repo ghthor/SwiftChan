@@ -34,7 +34,7 @@ public class SyncedComm<V> {
 	private let receiver = dispatch_group_create()
 
 	// Sychronizes read/write of the has[Sender|Receiver] variables
-	let q: dispatch_queue_t = {
+	private let q: dispatch_queue_t = {
 		let uuid = NSUUID().UUIDString
 		return dispatch_queue_create("org.eksdyne.SyncedComm.\(uuid)", DISPATCH_QUEUE_SERIAL)
 	}()
