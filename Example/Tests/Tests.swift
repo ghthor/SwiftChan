@@ -105,6 +105,24 @@ class SynchronousChannel: QuickSpec {
 					expectAllValuesWereRead()
 				}
             }
+
+			it("can be selected") {
+				go {
+					ch <- 1
+				}
+
+				let noCommCh = chan<Int>()
+
+				Select {
+					[
+						recv(from: ch) { (v) in
+							expect(v) == 1
+						},
+						recv(from: noCommCh) { (_) in
+						},
+					]
+				}
+			}
         }
     }
 }
