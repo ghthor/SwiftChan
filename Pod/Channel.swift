@@ -187,6 +187,9 @@ public class chan<V>: SendChannel, RecvChannel {
 		return dispatch_queue_create("org.eksdyne.SynchronousChan.\(uuid)", DISPATCH_QUEUE_SERIAL)
 	}()
 
+	public init() {
+	}
+
 	public func asRecvOnly() -> RecvOnlyChan<chan<V>> {
 		return RecvOnlyChan<chan<V>>(ch: self)
 	}
