@@ -271,50 +271,6 @@ public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
 	}
 }
 
-// FIXME: This class is broken and racy
-public class BufferedChan<V>: chan<V> {
-	let cap: Int
-	var buf = [V]()
-
-	init(capacity: Int) {
-		cap = capacity
-	}
-
-	public override func send(v: V) {
-		var wasSent: Bool = false
-		dispatch_sync(q) {
-			if self.buf.count < self.cap {
-				self.buf.append(v)
-				wasSent = true
-			}
-		}
-
-		if wasSent {
-			return
-		}
-
-		// FIXME: Race condidition
-		super.send(v)
-	}
-
-	public override func recv() -> V {
-		var v: V?
-		dispatch_sync(q) {
-			if self.buf.count > 0 {
-				v = self.buf.removeAtIndex(0)
-				// FIXME: dequeue a sender waiting for a receiver
-			}
-		}
-
-		if v != nil {
-			return v!
-		}
-
-		// FIXME: Race condidition
-		return super.recv()
-	}
-}
-
 public protocol SendChannel {
 	typealias ValueType
 	func send(value: ValueType)
