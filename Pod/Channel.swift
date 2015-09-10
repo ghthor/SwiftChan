@@ -72,8 +72,7 @@ public class SyncedComm<V> {
 		dispatch_group_enter(receiver)
 	}
 
-	var leaveOnce = dispatch_once_t()
-
+	private var leaveOnce = dispatch_once_t()
 	private func leave() {
 		dispatch_once(&leaveOnce) {
 			dispatch_group_leave(self.sender)
