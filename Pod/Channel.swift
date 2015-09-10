@@ -29,7 +29,18 @@ public func gomain(@autoclosure routine: () -> ()) {
 	gomain(routine)
 }
 
-public class SyncedComm<V> {
+public typealias CommReadyCallback = () -> ()
+public protocol Comm {
+	var isReady: Bool { get }
+	func onReady(CommReadyCallback)
+
+	// Returns true if the Comm was canceled
+	func cancel() -> Bool
+	// Returns true if the Comm was executed
+	func proceed() -> Bool
+}
+
+public class SyncedComm<V>: Comm {
 	private let sender = dispatch_group_create()
 	private let receiver = dispatch_group_create()
 
@@ -39,12 +50,16 @@ public class SyncedComm<V> {
 		return dispatch_queue_create("org.eksdyne.SyncedComm.\(uuid)", DISPATCH_QUEUE_SERIAL)
 	}()
 
-	let readyCallback: (SyncedComm<V>) -> ()
+	private var ready: CommReadyCallback?
 
 	private var hasSender: Bool = false {
 		didSet {
 			if hasSender && hasReceiver {
-				readyCallback(self)
+				if let ready = ready {
+					ready()
+				} else {
+					go { self.proceed() }
+				}
 			}
 		}
 	}
@@ -52,8 +67,20 @@ public class SyncedComm<V> {
 	private var hasReceiver: Bool = false {
 		didSet {
 			if hasSender && hasReceiver {
-				readyCallback(self)
+				if let ready = ready {
+					ready()
+				} else {
+					go { self.proceed() }
+				}
 			}
+		}
+	}
+
+	public var isReady: Bool {
+		get {
+			var ready: Bool = false
+			dispatch_sync(q) { ready = self.hasSender && self.hasReceiver }
+			return ready
 		}
 	}
 
@@ -62,8 +89,12 @@ public class SyncedComm<V> {
 	var senderCanceled: Bool?
 	var receiverCanceled: Bool?
 
-	init(onReady: (SyncedComm<V>) -> ()) {
-		readyCallback = onReady
+	init() {
+		enter()
+	}
+
+	init(onReady: CommReadyCallback) {
+		ready = onReady
 		enter()
 	}
 
@@ -77,6 +108,18 @@ public class SyncedComm<V> {
 		dispatch_once(&leaveOnce) {
 			dispatch_group_leave(self.sender)
 			dispatch_group_leave(self.receiver)
+		}
+	}
+
+	// Override the current onReady callback
+	public func onReady(callback: CommReadyCallback) {
+		dispatch_sync(q) {
+			let isReady = self.hasSender && self.hasReceiver
+			if !isReady {
+				self.ready = callback
+			} else {
+				go { callback() }
+			}
 		}
 	}
 
@@ -103,14 +146,8 @@ public class SyncedComm<V> {
 		return (v, true)
 	}
 
-	func ready() -> Bool {
-		var ready: Bool = false
-		dispatch_sync(q) { ready = self.hasSender && self.hasReceiver }
-		return ready
-	}
-
 	// Returns true if the Comm was canceled
-	func cancel() -> Bool {
+	public func cancel() -> Bool {
 		var canceled: Bool?
 		dispatch_sync(q) {
 			if self.canceled == nil {
@@ -122,11 +159,11 @@ public class SyncedComm<V> {
 		}
 
 
-		return !(canceled!)
+		return canceled!
 	}
 
 	// Returns true if the Comm was executed
-	func proceed() -> Bool {
+	public func proceed() -> Bool {
 		var canceled: Bool?
 		dispatch_sync(q) {
 			if self.canceled == nil {
@@ -142,13 +179,11 @@ public class SyncedComm<V> {
 	}
 }
 
-private class WaitForSend<V> {
+public class WaitForSend<V> {
 	private let comm: SyncedComm<V>
 
 	init() {
-		comm = SyncedComm<V> { (comm) in
-			go { comm.proceed() }
-		}
+		comm = SyncedComm<V>()
 	}
 
 	private func send(v: V) -> Bool {
@@ -160,12 +195,11 @@ private class WaitForSend<V> {
 	}
 }
 
-private class WaitForRecv<V> {
+public class WaitForRecv<V> {
 	private let comm: SyncedComm<V>
+
 	init() {
-		comm = SyncedComm<V> { (comm) in
-			go { comm.proceed() }
-		}
+		comm = SyncedComm<V>()
 	}
 
 	private func recv() -> (V?, Bool) {
