@@ -186,6 +186,10 @@ public class WaitForSend<V> {
 		comm = SyncedComm<V>()
 	}
 
+	init(syncedComm: SyncedComm<V>) {
+		comm = syncedComm
+	}
+
 	private func send(v: V) -> Bool {
 		return comm.senderEnter(v)
 	}
@@ -200,6 +204,10 @@ public class WaitForRecv<V> {
 
 	init() {
 		comm = SyncedComm<V>()
+	}
+
+	init(syncedComm: SyncedComm<V>) {
+		comm = syncedComm
 	}
 
 	private func recv() -> (V?, Bool) {
@@ -286,6 +294,26 @@ public class chan<V>: SendChannel, RecvChannel {
 			}
 		}
 	}
+
+}
+
+extension chan: SelectableRecvChannel {
+	public func recv(onReady: CommReadyCallback) -> (WaitForRecv<V>?, WaitForSend<V>?) {
+		var sender: WaitForRecv<V>?
+		var receiver: WaitForSend<V>?
+
+		dispatch_sync(q) {
+			if self.waitingForRecvQ.count > 0 {
+				sender = self.waitingForRecvQ.removeAtIndex(0)
+				sender!.comm.onReady(onReady)
+			} else {
+				receiver = WaitForSend<V>(syncedComm: SyncedComm<V>(onReady: onReady))
+				self.waitingForSendQ.append(receiver!)
+			}
+		}
+
+		return (sender, receiver)
+	}
 }
 
 public struct SendOnlyChan<C: SendChannel>: SendChannel {
@@ -312,6 +340,11 @@ public protocol SendChannel {
 public protocol RecvChannel {
 	typealias ValueType
 	func recv() -> ValueType
+}
+
+public protocol SelectableRecvChannel {
+	typealias ValueType
+	func recv(CommReadyCallback) -> (WaitForRecv<ValueType>?, WaitForSend<ValueType>?)
 }
 
 public struct ASyncRecv<V> {
@@ -358,6 +391,55 @@ public prefix func <- <C: RecvChannel, V where C.ValueType == V> (ch: C) -> V {
 public protocol SelectCase {
 	func start(onReady: CommReadyCallback) -> Comm
 	func wasSelected()
+}
+
+public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: SelectCase {
+	let ch: C
+	let received: (V) -> ()
+
+	private let receivedValue = dispatch_group_create()
+	private var v: V?
+
+	public init(channel: C, onSelected: (V) -> ()) {
+		ch = channel
+		received = onSelected
+	}
+
+	public func start(onReady: CommReadyCallback) -> Comm {
+		v = nil
+		dispatch_group_enter(receivedValue)
+
+		let (sender, receiver) = ch.recv(onReady)
+		if let sender = sender {
+			go {
+				let (v, _) = sender.recv()
+				self.v = v
+				dispatch_group_leave(self.receivedValue)
+				onReady()
+			}
+
+			return sender.comm
+
+		} else {
+			go {
+				let (v, _) = receiver!.waitForSender()
+				self.v = v
+				dispatch_group_leave(self.receivedValue)
+				onReady()
+			}
+
+			return receiver!.comm
+		}
+	}
+
+	public func wasSelected() {
+		dispatch_group_wait(receivedValue, DISPATCH_TIME_FOREVER)
+		received(v!)
+	}
+}
+
+public func recv<C: SelectableRecvChannel, V where C.ValueType == V>(from channel: C, block: (V) -> ()) -> SelectCase {
+	return RecvCase<C, V>(channel: channel, onSelected: block)
 }
 
 public func Select (cases: () -> [SelectCase]) {
