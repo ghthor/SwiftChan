@@ -257,7 +257,7 @@ public struct SendOnlyChan<C: SendChannel>: SendChannel {
 
 	public func send(value: C.ValueType) {
 		ch.send(value)
-				}
+	}
 }
 
 public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
