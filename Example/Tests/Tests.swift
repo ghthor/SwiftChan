@@ -4,46 +4,106 @@ import Quick
 import Nimble
 import SwiftChan
 
-class TableOfContentsSpec: QuickSpec {
+class SynchronousChannel: QuickSpec {
     override func spec() {
-        describe("these will fail") {
+        describe("a synchronous channel") {
+			let totalSends = 10
+			let ch = chan<Int>()
 
-            it("can do maths") {
-                expect(1) == 2
-            }
+			describe("will send and receive") {
+				it("with one sender and one receiver") {
+					go {
+						for i in 0...totalSends {
+							ch <- i
+						}
+					}
 
-            it("can read") {
-                expect("number") == "string"
-            }
+					for i in 0...totalSends {
+						expect(<-ch) == i
+					}
+				}
 
-            it("will eventually fail") {
-                expect("time").toEventually( equal("done") )
-            }
-            
-            context("these will pass") {
+				let sendsq = dispatch_queue_create("org.eksdyne.ChannelSyncQueue", DISPATCH_QUEUE_SERIAL)
+				var sends = Set<Int>()
 
-                it("can do maths") {
-                    expect(23) == 23
-                }
+				let genValue = { () -> Int in
+					for ;; {
+						let v = Int(arc4random())
+						var wasInserted = false
 
-                it("can read") {
-                    expect("🐮") == "🐮"
-                }
+						dispatch_sync(sendsq) {
+							if sends.contains(v) {
+								return
+							}
 
-                it("will eventually pass") {
-                    var time = "passing"
+							sends.insert(v)
+							wasInserted = true
+						}
 
-                    dispatch_async(dispatch_get_main_queue()) {
-                        time = "done"
-                    }
+						if wasInserted {
+							return v
+						}
+					}
+				}
 
-                    waitUntil { done in
-                        NSThread.sleepForTimeInterval(0.5)
-                        expect(time) == "done"
+				it("with many senders and one receiver") {
+					for _ in 0...totalSends {
+						let v = genValue()
+						go { ch <- v }
+					}
 
-                        done()
-                    }
-                }
+					for _ in 0...totalSends {
+						let v = <-ch
+						expect(sends.remove(v)) != nil
+					}
+
+					expect(sends.count) == 0
+				}
+
+				let expectAllValuesWereRead = { () -> () in
+					let fanIn = chan<Int>()
+					for _ in 0...totalSends {
+						go {
+							let v = <-ch
+							fanIn <- v
+						}
+					}
+
+					for _ in 0...totalSends {
+						let v = <-fanIn
+						dispatch_sync(sendsq) {
+							expect(sends.remove(v)) != nil
+						}
+					}
+
+					dispatch_sync(sendsq) {
+						expect(sends.count) == 0
+					}
+				}
+
+				it("with one sender and many receivers") {
+					go {
+						for _ in 0...totalSends {
+							let v = genValue()
+							ch <- v
+						}
+					}
+
+					expectAllValuesWereRead()
+				}
+
+				it("with many senders and many receivers") {
+					go {
+						for _ in 0...totalSends {
+							go {
+								let v = genValue()
+								ch <- v
+							}
+						}
+					}
+
+					expectAllValuesWereRead()
+				}
             }
         }
     }
