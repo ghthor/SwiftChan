@@ -354,3 +354,47 @@ prefix operator <- {}
 public prefix func <- <C: RecvChannel, V where C.ValueType == V> (ch: C) -> V {
 	return ch.recv()
 }
+
+public protocol SelectCase {
+	func start(onReady: CommReadyCallback) -> Comm
+	func wasSelected()
+}
+
+public func Select (cases: () -> [SelectCase]) {
+	return selectCases(cases())
+}
+
+private func selectCases(cases: [SelectCase]) {
+	let commSema = dispatch_semaphore_create(1)
+
+	let comms = map(cases) { (c) -> (SelectCase, Comm) in
+		return (c, c.start {
+			dispatch_semaphore_signal(commSema)
+		})
+	}
+
+	dispatch_semaphore_wait(commSema, DISPATCH_TIME_FOREVER)
+
+	let caseProceeded: SelectCase? = { () in
+		for (c, comm) in comms {
+			if comm.isReady {
+				if comm.proceed() {
+					return c
+				}
+			}
+		}
+
+		return nil
+	}()
+
+
+	for (_, comm) in comms {
+		comm.cancel()
+	}
+
+	if let c = caseProceeded {
+		return c.wasSelected()
+	}
+
+	return selectCases(cases)
+}
