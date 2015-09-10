@@ -217,7 +217,7 @@ public class chan<V>: SendChannel, RecvChannel {
 			}
 
 		} else {
-			if sender!.waitForRecv(v) {
+			if !sender!.waitForRecv(v) {
 				send(v)
 			}
 		}
