@@ -5,8 +5,8 @@ import Nimble
 import SwiftChan
 
 class SynchronousChannel: QuickSpec {
-    override func spec() {
-        describe("a synchronous channel") {
+	override func spec() {
+		describe("a synchronous channel") {
 			let totalSends = 10
 			let ch = chan<Int>()
 
@@ -104,7 +104,7 @@ class SynchronousChannel: QuickSpec {
 
 					expectAllValuesWereRead()
 				}
-            }
+			}
 
 			it("can be selected") {
 				go {
@@ -123,6 +123,6 @@ class SynchronousChannel: QuickSpec {
 					]
 				}
 			}
-        }
-    }
+		}
+	}
 }
