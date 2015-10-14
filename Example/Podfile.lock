@@ -1,11 +1,11 @@
 PODS:
-  - Nimble (1.0.0)
-  - Quick (0.3.1)
+  - Nimble (2.0.0)
+  - Quick (0.6.0)
   - SwiftChan (0.1.0)
 
 DEPENDENCIES:
   - Nimble
-  - Quick (~> 0.3.1)
+  - Quick
   - SwiftChan (from `../`)
 
 EXTERNAL SOURCES:
@@ -13,8 +13,8 @@ EXTERNAL SOURCES:
     :path: "../"
 
 SPEC CHECKSUMS:
-  Nimble: 8bee528e5fcc403653076545db562d2b5db7bb87
-  Quick: 824572d3d198d51e52cf4aa722cebf7e59952a35
+  Nimble: 472e75466819eb8c06299233e87c694a9b51328a
+  Quick: 563686dbcf0ae0f9f7401ac9cd2d786ee1b7f3d7
   SwiftChan: d20c11f86f88d5dbefdcfeca764bb25b9325b81f
 
 COCOAPODS: 0.38.2
