@@ -32,7 +32,7 @@ public func gomain(@autoclosure routine: () -> ()) {
 public typealias CommReadyCallback = () -> ()
 public protocol Comm {
 	var isReady: Bool { get }
-	func onReady(CommReadyCallback)
+	func onReady(_: CommReadyCallback)
 
 	// Returns true if the Comm was canceled
 	func cancel() -> Bool
@@ -344,7 +344,7 @@ public protocol RecvChannel {
 
 public protocol SelectableRecvChannel {
 	typealias ValueType
-	func recv(CommReadyCallback) -> (WaitForRecv<ValueType>?, WaitForSend<ValueType>?)
+	func recv(_: CommReadyCallback) -> (WaitForRecv<ValueType>?, WaitForSend<ValueType>?)
 }
 
 public struct ASyncRecv<V> {
