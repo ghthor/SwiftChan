@@ -459,7 +459,7 @@ public func Select (cases: () -> [SelectCase]) {
 private func selectCases(cases: [SelectCase]) {
 	let commSema = dispatch_semaphore_create(1)
 
-	let comms = map(cases) { (c) -> (SelectCase, Comm) in
+	let comms = cases.map { (c) -> (SelectCase, Comm) in
 		return (c, c.start {
 			dispatch_semaphore_signal(commSema)
 		})
