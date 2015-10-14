@@ -17,7 +17,7 @@ class ViewController: UIViewController {
 		let app = <-applicationCh
 
 		ASyncRecv { (name) in
-			println(name)
+			print(name)
 		} <- applicationNameCh
     }
 
