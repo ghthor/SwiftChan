@@ -355,12 +355,22 @@ infix operator <- { associativity left }
 
 // Send is safe to use from the main queue
 public func <- <C: SendChannel, V where C.ValueType == V> (ch: C, value: V) {
-	if NSOperationQueue.currentQueue()?.underlyingQueue == dispatch_get_main_queue() {
-		go {
-			ch.send(value)
-		}
+	guard let queue = NSOperationQueue.currentQueue()?.underlyingQueue else {
+		ch.send(value)
+		return
+	}
 
-	} else {
+	guard let mainQ = dispatch_get_main_queue() else {
+		ch.send(value)
+		return
+	}
+
+	if queue.hash != mainQ.hash {
+		ch.send(value)
+		return
+	}
+
+	go {
 		ch.send(value)
 	}
 }
