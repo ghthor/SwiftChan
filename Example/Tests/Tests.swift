@@ -123,6 +123,65 @@ class SynchronousChannel: QuickSpec {
 					]
 				}
 			}
+
+			it("will select eveningly random among a group of communicating channels") {
+				let chs = [
+					chan<Int>(),
+					chan<Int>(),
+					chan<Int>()
+				]
+
+				chs.enumerate().forEach { (i, ch) in
+					dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0)) {
+						for ;; {
+							ch <- i
+						}
+					}
+				}
+
+				// [Index: NumberTimesRead]
+				var reads = chs.enumerate().reduce([Int: Int]()) { (var reads, ch) in
+					reads[ch.index] = 0
+					return reads
+				}
+
+				var totalReads = 0
+
+				let syncGroup = dispatch_group_create()
+
+				for ;; {
+					dispatch_group_enter(syncGroup)
+
+					go(after: 10) {
+						Select {
+							chs.enumerate().map { (i, ch) in
+								return recv(from: ch) { (v) in
+									reads[i] = reads[i]! + 1
+									totalReads++
+								}
+							}
+						}
+
+						dispatch_group_leave(syncGroup)
+					}
+
+					dispatch_group_wait(syncGroup, DISPATCH_TIME_FOREVER)
+
+					if totalReads >= 40 {
+						break
+					}
+				}
+
+				reads.values.forEach { (chReads) in
+					// This doesn't seem easy to specify. Requiring each channel
+					// to have been selected 2 times out of 40 selects, so this
+					// doesn't really specify an even selection among channels that
+					// can communicate. I believe this descrepancy is being caused
+					// by thread scheduling and I haven't thought of a good way to
+					// make this spec more uniform.
+					expect(chReads) > 2
+				}
+			}
 		}
 	}
 }

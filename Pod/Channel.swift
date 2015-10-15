@@ -473,15 +473,18 @@ private func selectCases(cases: [SelectCase]) {
 	dispatch_semaphore_wait(commSema, DISPATCH_TIME_FOREVER)
 
 	let caseProceeded: SelectCase? = { () in
-		for (c, comm) in comms {
-			if comm.isReady {
-				if comm.proceed() {
-					return c
-				}
-			}
+		let ready = comms.filter { (_, comm) in
+			comm.isReady
 		}
 
-		return nil
+		if ready.count == 0 {
+			return nil
+		}
+
+		let i = Int(arc4random_uniform(UInt32(ready.count)))
+		let (c, comm) = ready[i]
+		comm.proceed()
+		return c
 	}()
 
 
