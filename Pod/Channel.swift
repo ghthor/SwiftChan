@@ -29,6 +29,11 @@ public func gomain(@autoclosure routine: () -> ()) {
 	gomain(routine)
 }
 
+public func go(after delay: Int, routine: () -> ()) {
+	let delay = dispatch_time(DISPATCH_TIME_NOW, Int64(UInt64(delay) * NSEC_PER_MSEC))
+	dispatch_after(delay, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), routine)
+}
+
 public typealias CommReadyCallback = () -> ()
 public protocol Comm {
 	var isReady: Bool { get }
