@@ -8,10 +8,8 @@
 
 import UIKit
 
-private let appCh = chan<UIApplication>()
 private let appNameCh = chan<String>()
 
-let applicationCh = appCh.asRecvOnly()
 let applicationNameCh = appNameCh.asRecvOnly()
 
 @UIApplicationMain
@@ -22,16 +20,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(application: UIApplication, didFinishLaunchingWithOptions launchOptions: [NSObject: AnyObject]?) -> Bool {
 		go {
-			while true {
-				appCh.asSendOnly() <- application
-			}
-		}
-
-		go {
-			while true {
+			for ;; {
 				appNameCh.asSendOnly() <- "SwiftChan Example"
 			}
 		}
+
         return true
     }
 
