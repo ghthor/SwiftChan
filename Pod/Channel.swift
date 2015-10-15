@@ -13,10 +13,6 @@ public func go(routine: () -> ()) {
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), routine)
 }
 
-public func go(@autoclosure routine: () -> ()) {
-	go(routine)
-}
-
 public func go(queue: NSOperationQueue, routine: () -> ()) {
 	queue.addOperation(NSBlockOperation(block: routine))
 }
