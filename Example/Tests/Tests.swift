@@ -107,20 +107,47 @@ class SynchronousChannel: QuickSpec {
 			}
 
 			it("can be selected") {
-				go {
-					ch <- 1
+				let senders = (0..<2).map { (i) -> chan<Int> in
+					let ch = chan<Int>()
+
+					go {
+						ch <- i
+					}
+
+					return ch
+				}.enumerate().map { (i, ch) -> SelectCase in
+					return recv(from: ch) { (v: Int) in
+						expect(v) == i
+					}
+				}
+
+				let receivers = (0..<2).map { (i) -> chan<Int> in
+					let ch = chan<Int>()
+
+					go {
+						expect(<-ch) == i
+					}
+
+					return ch
+				}.enumerate().map { (i, ch) -> SelectCase in
+					return send(to: ch, value: i) {}
 				}
 
 				let noCommCh = chan<Int>()
 
+				// Select with only receives
 				Select {
-					[
-						recv(from: ch) { (v) in
-							expect(v) == 1
-						},
-						recv(from: noCommCh) { (_) in
-						},
-					]
+					senders + [recv(from: noCommCh) { (_) in }]
+				}
+
+				// Select with only sends
+				Select {
+					receivers + [recv(from: noCommCh) { (_) in }]
+				}
+
+				// Select with both sends and receives
+				Select {
+					senders + receivers + [recv(from: noCommCh) { (_) in }]
 				}
 			}
 
