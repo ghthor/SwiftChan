@@ -47,7 +47,7 @@
 		83B60245855FE4746C2FA39D /* Pods-SwiftChan_Tests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SwiftChan_Tests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-SwiftChan_Tests/Pods-SwiftChan_Tests.debug.xcconfig"; sourceTree = "<group>"; };
 		E41417FD3248547C8790E6A3 /* Pods_SwiftChan_Tests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_SwiftChan_Tests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EB5B7E4F9C85C378E3334838 /* SwiftChan.podspec */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = SwiftChan.podspec; path = ../SwiftChan.podspec; sourceTree = "<group>"; };
-		EBDE0C7B1B9620150022BB08 /* Channel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Channel.swift; path = ../Pod/Channel.swift; sourceTree = "<group>"; };
+		EBDE0C7B1B9620150022BB08 /* Channel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Channel.swift; sourceTree = "<group>"; };
 		FED5F3A7EF6CBAE677631BF1 /* Pods-SwiftChan_Example.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SwiftChan_Example.release.xcconfig"; path = "Pods/Target Support Files/Pods-SwiftChan_Example/Pods-SwiftChan_Example.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -94,7 +94,7 @@
 		607FACC71AFB9204008FA782 = {
 			isa = PBXGroup;
 			children = (
-				EBDE0C7B1B9620150022BB08 /* Channel.swift */,
+				EB232BB21CD32BE5004DE08D /* package */,
 				607FACF51AFB993E008FA782 /* Podspec Metadata */,
 				607FACD21AFB9204008FA782 /* Example for SwiftChan */,
 				607FACE81AFB9204008FA782 /* Tests */,
@@ -160,6 +160,15 @@
 				6A31FD9FE7E441F13D6142DB /* LICENSE */,
 			);
 			name = "Podspec Metadata";
+			sourceTree = "<group>";
+		};
+		EB232BB21CD32BE5004DE08D /* package */ = {
+			isa = PBXGroup;
+			children = (
+				EBDE0C7B1B9620150022BB08 /* Channel.swift */,
+			);
+			name = package;
+			path = ../Pod;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
