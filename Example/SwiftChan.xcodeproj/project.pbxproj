@@ -15,6 +15,8 @@
 		607FACDD1AFB9204008FA782 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 607FACDC1AFB9204008FA782 /* Images.xcassets */; };
 		607FACE01AFB9204008FA782 /* LaunchScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = 607FACDE1AFB9204008FA782 /* LaunchScreen.xib */; };
 		607FACEC1AFB9204008FA782 /* Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 607FACEB1AFB9204008FA782 /* Tests.swift */; };
+		EB232BAF1CD3259D004DE08D /* operators.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB232BAE1CD3259D004DE08D /* operators.swift */; };
+		EB232BB11CD32B7D004DE08D /* goroutine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB232BB01CD32B7D004DE08D /* goroutine.swift */; };
 		EBDE0C7C1B9620150022BB08 /* Channel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBDE0C7B1B9620150022BB08 /* Channel.swift */; };
 /* End PBXBuildFile section */
 
@@ -46,6 +48,8 @@
 		6A31FD9FE7E441F13D6142DB /* LICENSE */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = LICENSE; path = ../LICENSE; sourceTree = "<group>"; };
 		83B60245855FE4746C2FA39D /* Pods-SwiftChan_Tests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SwiftChan_Tests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-SwiftChan_Tests/Pods-SwiftChan_Tests.debug.xcconfig"; sourceTree = "<group>"; };
 		E41417FD3248547C8790E6A3 /* Pods_SwiftChan_Tests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_SwiftChan_Tests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		EB232BAE1CD3259D004DE08D /* operators.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = operators.swift; sourceTree = "<group>"; };
+		EB232BB01CD32B7D004DE08D /* goroutine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = goroutine.swift; sourceTree = "<group>"; };
 		EB5B7E4F9C85C378E3334838 /* SwiftChan.podspec */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = SwiftChan.podspec; path = ../SwiftChan.podspec; sourceTree = "<group>"; };
 		EBDE0C7B1B9620150022BB08 /* Channel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Channel.swift; sourceTree = "<group>"; };
 		FED5F3A7EF6CBAE677631BF1 /* Pods-SwiftChan_Example.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SwiftChan_Example.release.xcconfig"; path = "Pods/Target Support Files/Pods-SwiftChan_Example/Pods-SwiftChan_Example.release.xcconfig"; sourceTree = "<group>"; };
@@ -165,6 +169,8 @@
 		EB232BB21CD32BE5004DE08D /* package */ = {
 			isa = PBXGroup;
 			children = (
+				EB232BB01CD32B7D004DE08D /* goroutine.swift */,
+				EB232BAE1CD3259D004DE08D /* operators.swift */,
 				EBDE0C7B1B9620150022BB08 /* Channel.swift */,
 			);
 			name = package;
@@ -371,7 +377,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				607FACD81AFB9204008FA782 /* ViewController.swift in Sources */,
+				EB232BAF1CD3259D004DE08D /* operators.swift in Sources */,
 				EBDE0C7C1B9620150022BB08 /* Channel.swift in Sources */,
+				EB232BB11CD32B7D004DE08D /* goroutine.swift in Sources */,
 				607FACD61AFB9204008FA782 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

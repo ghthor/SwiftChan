@@ -8,28 +8,6 @@
 
 import Foundation
 
-// Inspired from https://gist.github.com/kainosnoema/dc8b8db0007412244b4a
-public func go(routine: () -> ()) {
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), routine)
-}
-
-public func go(queue: NSOperationQueue, routine: () -> ()) {
-	queue.addOperation(NSBlockOperation(block: routine))
-}
-
-public func gomain(routine: () -> ()) {
-	dispatch_async(dispatch_get_main_queue(), routine)
-}
-
-public func gomain(@autoclosure routine: () -> ()) {
-	gomain(routine)
-}
-
-public func go(after delay: Int, routine: () -> ()) {
-	let delay = dispatch_time(DISPATCH_TIME_NOW, Int64(UInt64(delay) * NSEC_PER_MSEC))
-	dispatch_after(delay, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), routine)
-}
-
 public typealias CommReadyCallback = () -> ()
 public protocol Comm {
 	var isReady: Bool { get }
@@ -374,53 +352,6 @@ public protocol SelectableSendChannel {
 
 public struct ASyncRecv<V> {
 	let callback: (V) -> Void
-}
-
-infix operator <- { associativity left }
-
-// Send is safe to use from the main queue
-public func <- <C: SendChannel, V where C.ValueType == V> (ch: C, value: V) {
-	guard let queue = NSOperationQueue.currentQueue()?.underlyingQueue else {
-		ch.send(value)
-		return
-	}
-
-	guard let mainQ = dispatch_get_main_queue() else {
-		ch.send(value)
-		return
-	}
-
-	if queue.hash != mainQ.hash {
-		ch.send(value)
-		return
-	}
-
-	go {
-		ch.send(value)
-	}
-}
-
-public func <- <C: RecvChannel, V where C.ValueType == V> (receiver: ASyncRecv<V>, ch: C) {
-	let queue = NSOperationQueue.currentQueue()
-	go {
-		let v = ch.recv()
-		if let q = queue {
-			go(q) {
-				receiver.callback(v)
-			}
-
-		} else {
-			gomain {
-				receiver.callback(v)
-			}
-		}
-	}
-}
-
-prefix operator <- {}
-
-public prefix func <- <C: RecvChannel, V where C.ValueType == V> (ch: C) -> V {
-	return ch.recv()
 }
 
 public protocol SelectCase {
