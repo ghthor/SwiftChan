@@ -353,22 +353,22 @@ public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
 }
 
 public protocol SendChannel {
-	typealias ValueType
+	associatedtype ValueType
 	func send(value: ValueType)
 }
 
 public protocol RecvChannel {
-	typealias ValueType
+	associatedtype ValueType
 	func recv() -> ValueType
 }
 
 public protocol SelectableRecvChannel {
-	typealias ValueType
+	associatedtype ValueType
 	func recv(_: CommReadyCallback) -> (WaitForRecv<ValueType>?, WaitForSend<ValueType>?)
 }
 
 public protocol SelectableSendChannel {
-	typealias ValueType
+	associatedtype ValueType
 	func send(_: CommReadyCallback) -> (WaitForSend<ValueType>?, WaitForRecv<ValueType>?)
 }
 
