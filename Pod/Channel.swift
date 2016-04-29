@@ -3,7 +3,7 @@
 //  SwiftChan
 //
 //  Created by Willa Drengwitz on 9/1/15.
-//  Copyright (c) 2015 CocoaPods. All rights reserved.
+//  Copyright (c) 2015 Eksdyne Research. All rights reserved.
 //
 
 import Foundation
