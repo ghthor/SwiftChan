@@ -198,6 +198,12 @@ public class WaitForRecv<V> {
 	}
 }
 
+// What is about to happen as a thread enters into a send action on a channel.
+private enum Send<V> {
+	case ToReceiver(WaitForSend<V>)
+	case Block(WaitForRecv<V>)
+}
+
 public class chan<V>: SendChannel, RecvChannel {
 	private var receivers = [WaitForSend<V>]()
 	private var senders = [WaitForRecv<V>]()
@@ -219,28 +225,31 @@ public class chan<V>: SendChannel, RecvChannel {
 	}
 
 	public func send(v: V) {
-		var foundReceiver: WaitForSend<V>?
-		var blockingWhile: WaitForRecv<V>?
+		// Prep a default action of blocking
+		var action: Send = .Block(WaitForRecv<V>())
 
 		dispatch_sync(q) {
-			guard self.receivers.count > 0 else {
-				blockingWhile = WaitForRecv<V>()
-				self.senders.append(blockingWhile!)
-				return
-			}
+			switch (action, self.receivers) {
+			case let (.Block(thread), receivers) where receivers.count == 0:
+				// Proceed with a Block waiting for a receiver
+				self.senders.append(thread)
 
-			foundReceiver = self.receivers.removeFirst()
+			default:
+				// Proceed with a send to an existing receiver
+				action = .ToReceiver(self.receivers.removeFirst())
+			}
 		}
 
-		if let receiver = foundReceiver {
-			if !receiver.send(v) {
-				send(v)
-			}
-
-		} else {
-			if !blockingWhile!.waitForRecv(v) {
-				send(v)
-			}
+		switch action {
+		case let .Block(thread)
+			where thread.waitForRecv(v): return
+		case let .ToReceiver(thread)
+			where thread.send(v): return
+		default:
+			// When thread.waitForRecv(v) or thread.send(v) return false
+			// the communication was canceled so the thread recurses into
+			// another attempt to send the value.
+			send(v)
 		}
 	}
 
