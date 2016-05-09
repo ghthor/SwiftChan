@@ -198,6 +198,12 @@ public class WaitForRecv<V> {
 	}
 }
 
+// What is about to happen as a thread enters into a receive action on a channel.
+private enum Receive<V> {
+	case FromSender(WaitForRecv<V>)
+	case Block(WaitForSend<V>)
+}
+
 // What is about to happen as a thread enters into a send action on a channel.
 private enum Send<V> {
 	case ToReceiver(WaitForSend<V>)
@@ -254,33 +260,33 @@ public class chan<V>: SendChannel, RecvChannel {
 	}
 
 	public func recv() -> V {
-		var foundSender: WaitForRecv<V>?
-		var blockingWhile: WaitForSend<V>?
+		var action: Receive = .Block(WaitForSend<V>())
 
 		dispatch_sync(q) {
-			guard self.senders.count > 0 else {
-				blockingWhile = WaitForSend<V>()
-				self.receivers.append(blockingWhile!)
-				return
-			}
+			switch (action, self.senders) {
 
-			foundSender = self.senders.removeFirst()
+			case let (.Block(thread), senders) where senders.count == 0:
+				self.receivers.append(thread)
+
+			default:
+				action = .FromSender(self.senders.removeFirst())
+
+			}
 		}
 
-		if let sender = foundSender {
-			guard case let (v?, _) = sender.recv() else {
-				return recv()
+		switch action {
+		case let .Block(thread):
+			if case let (v?, _) = thread.waitForSender() {
+				return v
 			}
 
-			return v
-
-		} else {
-			guard case let (v?, _) = blockingWhile!.waitForSender() else {
-				return recv()
+		case let .FromSender(thread):
+			if case let (v?, _) = thread.recv() {
+				return v
 			}
-
-			return v
 		}
+
+		return recv()
 	}
 
 }
