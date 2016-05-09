@@ -199,8 +199,8 @@ public class WaitForRecv<V> {
 }
 
 public class chan<V>: SendChannel, RecvChannel {
-	private var waitingForSendQ = [WaitForSend<V>]()
-	private var waitingForRecvQ = [WaitForRecv<V>]()
+	private var receivers = [WaitForSend<V>]()
+	private var senders = [WaitForRecv<V>]()
 
 	let q: dispatch_queue_t = {
 		let uuid = NSUUID().UUIDString
@@ -219,58 +219,58 @@ public class chan<V>: SendChannel, RecvChannel {
 	}
 
 	public func send(v: V) {
-		var receiver: WaitForSend<V>?
-		var sender: WaitForRecv<V>?
+		var foundReceiver: WaitForSend<V>?
+		var blockingWhile: WaitForRecv<V>?
 
 		dispatch_sync(q) {
-			if self.waitingForSendQ.count > 0 {
-				receiver = self.waitingForSendQ.removeAtIndex(0)
-			} else {
-				sender = WaitForRecv<V>()
-				self.waitingForRecvQ.append(sender!)
+			guard self.receivers.count > 0 else {
+				blockingWhile = WaitForRecv<V>()
+				self.senders.append(blockingWhile!)
+				return
 			}
+
+			foundReceiver = self.receivers.removeFirst()
 		}
 
-		if let receiver = receiver {
+		if let receiver = foundReceiver {
 			if !receiver.send(v) {
 				send(v)
 			}
 
 		} else {
-			if !sender!.waitForRecv(v) {
+			if !blockingWhile!.waitForRecv(v) {
 				send(v)
 			}
 		}
 	}
 
 	public func recv() -> V {
-		var sender: WaitForRecv<V>?
-		var receiver: WaitForSend<V>?
+		var foundSender: WaitForRecv<V>?
+		var blockingWhile: WaitForSend<V>?
 
 		dispatch_sync(q) {
-			if self.waitingForRecvQ.count > 0 {
-				sender = self.waitingForRecvQ.removeAtIndex(0)
-			} else {
-				receiver = WaitForSend<V>()
-				self.waitingForSendQ.append(receiver!)
+			guard self.senders.count > 0 else {
+				blockingWhile = WaitForSend<V>()
+				self.receivers.append(blockingWhile!)
+				return
 			}
+
+			foundSender = self.senders.removeFirst()
 		}
 
-		if let sender = sender {
-			let (v, _) = sender.recv()
-			if v == nil {
+		if let sender = foundSender {
+			guard case let (v?, _) = sender.recv() else {
 				return recv()
-			} else {
-				return v!
 			}
 
+			return v
+
 		} else {
-			let (v, _) = receiver!.waitForSender()
-			if v == nil {
+			guard case let (v?, _) = blockingWhile!.waitForSender() else {
 				return recv()
-			} else {
-				return v!
 			}
+
+			return v
 		}
 	}
 
@@ -282,12 +282,12 @@ extension chan: SelectableRecvChannel {
 		var receiver: WaitForSend<V>?
 
 		dispatch_sync(q) {
-			if self.waitingForRecvQ.count > 0 {
-				sender = self.waitingForRecvQ.removeAtIndex(0)
+			if self.senders.count > 0 {
+				sender = self.senders.removeAtIndex(0)
 				sender!.comm.onReady(onReady)
 			} else {
 				receiver = WaitForSend<V>(syncedComm: SyncedComm<V>(onReady: onReady))
-				self.waitingForSendQ.append(receiver!)
+				self.receivers.append(receiver!)
 			}
 		}
 
@@ -301,12 +301,12 @@ extension chan: SelectableSendChannel {
 		var sender: WaitForRecv<V>?
 
 		dispatch_sync(q) {
-			if self.waitingForSendQ.count > 0 {
-				receiver = self.waitingForSendQ.removeAtIndex(0)
+			if self.receivers.count > 0 {
+				receiver = self.receivers.removeAtIndex(0)
 				receiver!.comm.onReady(onReady)
 			} else {
 				sender = WaitForRecv<V>(syncedComm: SyncedComm<V>(onReady: onReady))
-				self.waitingForRecvQ.append(sender!)
+				self.senders.append(sender!)
 			}
 		}
 
