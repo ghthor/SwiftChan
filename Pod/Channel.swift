@@ -15,50 +15,136 @@ extension Unique {
 	static var newURI: String  { return "org.eksdyne.\(self.dynamicType)/\(newUUID)" }
 }
 
+// The result of a handoff without access to the value.
+public enum HandoffResult {
+	case Canceled
+	case Completed
+}
+
+// The result of a handoff with access to the value if
+// the handoff was completed succesfully.
+public enum HandoffReceiveResult<V> {
+	case Canceled
+	case Completed(V)
+
+	var withoutValue: HandoffResult {
+		switch self {
+		case .Canceled:  return .Canceled
+		case .Completed: return .Completed
+		}
+	}
+}
+
+public enum Handoff<V> {
+	case Empty
+
+	case Reader
+	case Value(V)
+
+	case Ready(V)
+
+	case Done(HandoffReceiveResult<V>)
+
+	func setValue(v: V) -> Handoff {
+		switch self {
+		case .Reader:
+			return .Ready(v)
+		default:
+			return .Value(v)
+		}
+	}
+
+	func hasReader() -> Handoff {
+		switch self {
+		case let .Value(v):
+			return Ready(v)
+		default:
+			return .Reader
+		}
+	}
+
+	func cancel() -> Handoff {
+		switch self {
+		case .Done: return self
+		default:    return .Done(.Canceled)
+		}
+	}
+
+	func complete() -> Handoff {
+		switch self {
+		case .Ready(let v):
+			return .Done(.Completed(v))
+		default:
+			return .Done(.Canceled)
+		}
+	}
+
+	var isReady: Bool {
+		switch self {
+		case .Ready:
+			fallthrough
+		case .Done:
+			return true
+
+		default: return false
+		}
+	}
+}
+
+// TODO: Remove
 public typealias CommReadyCallback = () -> ()
+
 public protocol Comm {
 	var isReady: Bool { get }
 	func onReady(_: CommReadyCallback)
 
 	// Returns true if the Comm was canceled
-	func cancel() -> Bool
+	func cancel() -> HandoffResult
 	// Returns true if the Comm was executed
-	func proceed() -> Bool
+	func proceed() -> HandoffResult
 }
 
 public class SyncedComm<V>: Comm, Unique {
-	private let sender = dispatch_semaphore_create(0)
-	private let receiver = dispatch_semaphore_create(0)
+	private let partner = dispatch_semaphore_create(0)
 
 	// Sychronizes read/write of the has[Sender|Receiver] variables
 	private let q = dispatch_queue_create("\(SyncedComm<V>.newURI).lock", DISPATCH_QUEUE_SERIAL)
 
 	private lazy var triggerHandoff: () -> () = { go { self.proceed() }}
 
-	private var hasSender: Bool = false {
-		didSet { maybeTriggerHandoff() }
+	private var handoff: Handoff<V> = .Empty {
+		didSet {
+			switch handoff {
+			case .Ready:
+				triggerHandoff()
+
+			case .Done:
+				release()
+
+			default: break
+			}
+		}
 	}
 
-	private var hasReceiver: Bool = false {
-		didSet { maybeTriggerHandoff() }
+	private func setValue(v: V) { handoff = handoff.setValue(v) }
+	private func hasReader()    { handoff = handoff.hasReader() }
+	private func cancelHandoff() -> Handoff<V> {
+		handoff = handoff.cancel()
+		return handoff
 	}
 
-	private var readyForHandoff: Bool { return hasSender && hasReceiver }
-
-	private func maybeTriggerHandoff() {
-		if readyForHandoff { triggerHandoff() }
+	private func completedHandoff() -> Handoff<V> {
+		handoff = handoff.complete()
+		return handoff
 	}
 
 	public var isReady: Bool {
 		get {
 			var ready: Bool = false
-			dispatch_sync(q) { ready = self.hasSender && self.hasReceiver }
+			dispatch_sync(q) { ready = self.handoff.isReady }
 			return ready
 		}
 	}
-
-	var v: V?
-	var canceled: Bool?
 
 	init() {}
 
@@ -66,76 +152,69 @@ public class SyncedComm<V>: Comm, Unique {
 		triggerHandoff = callback
 	}
 
-	private func leave() {
-		dispatch_semaphore_signal(sender)
-		dispatch_semaphore_signal(receiver)
+	// Release both the sender and receiver threads.
+	private func release() {
+		dispatch_semaphore_signal(partner)
+		dispatch_semaphore_signal(partner)
 	}
 
 	// Override the current onReady callback
 	public func onReady(callback: CommReadyCallback) {
 		dispatch_sync(q) {
-			let isReady = self.hasSender && self.hasReceiver
-			if !isReady {
-				self.triggerHandoff = callback
-			} else {
+			self.triggerHandoff = callback
+			if case .Ready = self.handoff {
 				go { callback() }
 			}
 		}
 	}
 
 	// Returns true if the communication went through
-	private func senderEnter(v: V) -> Bool {
-		self.v = v
-		dispatch_sync(q) { self.hasSender = true }
-		dispatch_semaphore_wait(sender, DISPATCH_TIME_FOREVER)
-		if canceled! {
-			return false
-		}
-
-		return true
+	private func senderEnter(v: V) -> HandoffResult {
+		dispatch_sync(q) { self.setValue(v) }
+		return wait().withoutValue
 	}
 
 	// Returns true if the communication went through
-	private func receiverEnter() -> (V?, Bool) {
-		dispatch_sync(q) { self.hasReceiver = true }
-		dispatch_semaphore_wait(receiver, DISPATCH_TIME_FOREVER)
-		if canceled! {
-			return (nil, false)
+	private func receiverEnter() -> HandoffReceiveResult<V> {
+		dispatch_sync(q) { self.hasReader() }
+		return wait()
+	}
+
+	private func wait() -> HandoffReceiveResult<V> {
+		dispatch_semaphore_wait(partner, DISPATCH_TIME_FOREVER)
+		guard case .Done(let result) = handoff else {
+			return .Canceled
 		}
 
-		return (v, true)
+		return result
 	}
 
 	// Returns true if the Comm was canceled
-	public func cancel() -> Bool {
-		var canceled: Bool?
+	public func cancel() -> HandoffResult {
+		var handoff: Handoff<V> = .Done(.Canceled)
 		dispatch_sync(q) {
-			if self.canceled == nil {
-				self.canceled = true
-				self.leave()
-			}
-
-			canceled = self.canceled
+			handoff = self.cancelHandoff()
 		}
 
+		guard case .Done(let result) = handoff else {
+			return .Canceled
+		}
 
-		return canceled!
+		return result.withoutValue
 	}
 
 	// Returns true if the Comm was executed
-	public func proceed() -> Bool {
-		var canceled: Bool?
+	public func proceed() -> HandoffResult {
+		var handoff: Handoff<V> = .Done(.Canceled)
 		dispatch_sync(q) {
-			if self.canceled == nil {
-				self.canceled = false
-				self.leave()
-			}
-
-			canceled = self.canceled
+			handoff = self.completedHandoff()
 		}
 
+		guard case .Done(let result) = handoff else {
+			return .Canceled
+		}
 
-		return !(canceled!)
+		return result.withoutValue
 	}
 }
 
@@ -150,11 +229,11 @@ public class WaitForSend<V> {
 		comm = syncedComm
 	}
 
-	private func send(v: V) -> Bool {
+	private func send(v: V) -> HandoffResult {
 		return comm.senderEnter(v)
 	}
 
-	private func waitForSender() -> (V?, Bool) {
+	private func waitForSender() -> HandoffReceiveResult<V> {
 		return comm.receiverEnter()
 	}
 }
@@ -170,11 +249,11 @@ public class WaitForRecv<V> {
 		comm = syncedComm
 	}
 
-	private func recv() -> (V?, Bool) {
+	private func recv() -> HandoffReceiveResult<V> {
 		return comm.receiverEnter()
 	}
 
-	private func waitForRecv(v: V) -> Bool {
+	private func waitForRecv(v: V) -> HandoffResult {
 		return comm.senderEnter(v)
 	}
 }
@@ -228,16 +307,21 @@ public class chan<V>: SendChannel, RecvChannel {
 		}
 
 		switch action {
-		case let .Block(thread)
-			where thread.waitForRecv(v): return
-		case let .ToReceiver(thread)
-			where thread.send(v): return
-		default:
-			// When thread.waitForRecv(v) or thread.send(v) return false
-			// the communication was canceled so the thread recurses into
-			// another attempt to send the value.
-			send(v)
+		case let .Block(thread):
+			if case .Completed = thread.waitForRecv(v) {
+				return
+			}
+
+		case let .ToReceiver(thread):
+			if case .Completed = thread.send(v) {
+				return
+			}
 		}
+
+		// When thread.waitForRecv(v) or thread.send(v) return false
+		// the communication was canceled so the thread recurses into
+		// another attempt to send the value.
+		send(v)
 	}
 
 	public func recv() -> V {
@@ -257,12 +341,12 @@ public class chan<V>: SendChannel, RecvChannel {
 
 		switch action {
 		case let .Block(thread):
-			if case let (v?, _) = thread.waitForSender() {
+			if case let .Completed(v) = thread.waitForSender() {
 				return v
 			}
 
 		case let .FromSender(thread):
-			if case let (v?, _) = thread.recv() {
+			if case let .Completed(v) = thread.recv() {
 				return v
 			}
 		}
@@ -359,8 +443,8 @@ public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: Selec
 	let ch: C
 	let received: (V) -> ()
 
-	private let receivedValue = dispatch_group_create()
-	private var v: V?
+	private let needResult = dispatch_group_create()
+	private var result: HandoffReceiveResult<V> = .Canceled
 
 	public init(channel: C, onSelected: (V) -> ()) {
 		ch = channel
@@ -368,39 +452,33 @@ public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: Selec
 	}
 
 	public func start(onReady: CommReadyCallback) -> Comm {
-		dispatch_group_enter(receivedValue)
-		v = nil
+		dispatch_group_enter(needResult)
+		result = .Canceled
 
-		func haveValue(v: V?) {
-			self.v = v
-			dispatch_group_leave(self.receivedValue)
+		func haveResult(result: HandoffReceiveResult<V>) {
+			self.result = result
+			dispatch_group_leave(self.needResult)
 			onReady()
 		}
 
 		switch ch.recv(onReady) {
 		case let .Block(thread):
-			go {
-				let (v, _) = thread.waitForSender()
-				haveValue(v)
-			}
-
+			go { haveResult(thread.waitForSender()) }
 			return thread.comm
 
 		case let .FromSender(thread):
-			go {
-				let (v, _) = thread.recv()
-				haveValue(v)
-			}
-
+			go { haveResult(thread.recv()) }
 			return thread.comm
 		}
 	}
 
 	public func wasSelected() {
-		dispatch_group_wait(receivedValue, DISPATCH_TIME_FOREVER)
+		dispatch_group_wait(needResult, DISPATCH_TIME_FOREVER)
 
 		// Calls into the block that is associated with the Select Case
-		received(v!)
+		if case let .Completed(v) = result {
+			received(v)
+		}
 	}
 }
 
@@ -487,6 +565,7 @@ private func selectCases(cases: [SelectCase]) {
 
 		let i = Int(arc4random_uniform(UInt32(ready.count)))
 		let (c, comm) = ready[i]
+		// TODO: Use return value to fix multiple select statement contention
 		comm.proceed()
 		return c
 	}()
