@@ -34,17 +34,6 @@ public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
 	}
 }
 
-extension SendChannel {
-	public func asSendOnly() -> SendOnlyChan<Self> {
-		return SendOnlyChan(ch: self)
-	}
-}
-
-extension RecvChannel {
-	public func asRecvOnly() -> RecvOnlyChan<Self> {
-		return RecvOnlyChan(ch: self)
-	}
-}
 
 public class GCDChan<Element> {
 	private var waiting = (receivers: [GCDHandoff<Element>](),
