@@ -9,13 +9,13 @@
 import Foundation
 
 public class WaitForSend<V> {
-	private let comm: SyncedComm<V>
+	private let comm: GCDHandoff<V>
 
 	init() {
-		comm = SyncedComm<V>()
+		comm = GCDHandoff<V>()
 	}
 
-	init(syncedComm: SyncedComm<V>) {
+	init(syncedComm: GCDHandoff<V>) {
 		comm = syncedComm
 	}
 
@@ -29,13 +29,13 @@ public class WaitForSend<V> {
 }
 
 public class WaitForRecv<V> {
-	private let comm: SyncedComm<V>
+	private let comm: GCDHandoff<V>
 
 	init() {
-		comm = SyncedComm<V>()
+		comm = GCDHandoff<V>()
 	}
 
-	init(syncedComm: SyncedComm<V>) {
+	init(syncedComm: GCDHandoff<V>) {
 		comm = syncedComm
 	}
 
@@ -148,7 +148,7 @@ public class Chan<V>: SendChannel, RecvChannel {
 
 extension Chan: SelectableRecvChannel {
 	public func recv(onReady: () -> ()) -> Receive<V> {
-		var action: Receive = .Block(WaitForSend<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
+		var action: Receive = .Block(WaitForSend<V>(syncedComm: GCDHandoff<V>(onReady: onReady)))
 
 		dispatch_sync(q) {
 			switch (action, self.senders) {
@@ -167,7 +167,7 @@ extension Chan: SelectableRecvChannel {
 
 extension Chan: SelectableSendChannel {
 	public func send(onReady: () -> ()) -> Send<V> {
-		var action: Send = .Block(WaitForRecv<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
+		var action: Send = .Block(WaitForRecv<V>(syncedComm: GCDHandoff<V>(onReady: onReady)))
 
 		dispatch_sync(q) {
 			switch (action, self.receivers) {

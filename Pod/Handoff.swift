@@ -94,11 +94,11 @@ public protocol Handoff {
 	func proceed() -> HandoffResult
 }
 
-public class SyncedComm<V>: Handoff, Unique {
+public class GCDHandoff<V>: Handoff, Unique {
 	private let partner = dispatch_semaphore_create(0)
 
 	// Sychronizes read/write of the has[Sender|Receiver] variables
-	private let q = dispatch_queue_create("\(SyncedComm<V>.newURI).lock", DISPATCH_QUEUE_SERIAL)
+	private let q = dispatch_queue_create("\(GCDHandoff<V>.newURI).lock", DISPATCH_QUEUE_SERIAL)
 
 	private lazy var triggerHandoff: () -> () = { go { self.proceed() }}
 
