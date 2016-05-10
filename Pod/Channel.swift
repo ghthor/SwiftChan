@@ -8,6 +8,13 @@
 
 import Foundation
 
+protocol Unique {}
+
+extension Unique {
+	static var newUUID: String { return NSUUID().UUIDString }
+	static var newURI: String  { return "org.eksdyne.\(self.dynamicType)/\(newUUID)" }
+}
+
 public typealias CommReadyCallback = () -> ()
 public protocol Comm {
 	var isReady: Bool { get }
@@ -19,15 +26,12 @@ public protocol Comm {
 	func proceed() -> Bool
 }
 
-public class SyncedComm<V>: Comm {
+public class SyncedComm<V>: Comm, Unique {
 	private let sender = dispatch_semaphore_create(0)
 	private let receiver = dispatch_semaphore_create(0)
 
 	// Sychronizes read/write of the has[Sender|Receiver] variables
-	private let q: dispatch_queue_t = {
-		let uuid = NSUUID().UUIDString
-		return dispatch_queue_create("org.eksdyne.SyncedComm.\(uuid)", DISPATCH_QUEUE_SERIAL)
-	}()
+	private let q = dispatch_queue_create("\(SyncedComm<V>.newURI).lock", DISPATCH_QUEUE_SERIAL)
 
 	private lazy var triggerHandoff: () -> () = { go { self.proceed() }}
 
