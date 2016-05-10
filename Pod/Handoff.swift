@@ -88,20 +88,15 @@ public protocol Handoff {
 	var isReady: Bool { get }
 	func onReady(_: () -> ())
 
-	// Returns true if the Comm was canceled
 	func cancel() -> HandoffResult
-	// Returns true if the Comm was executed
 	func proceed() -> HandoffResult
 }
 
 public class GCDHandoff<V>: Handoff, Unique {
 	private let partner = dispatch_semaphore_create(0)
 
-	// Sychronizes read/write of the has[Sender|Receiver] variables
 	private let q = dispatch_queue_create("\(GCDHandoff<V>.newURI).lock", DISPATCH_QUEUE_SERIAL)
-
 	private lazy var triggerHandoff: () -> () = { go { self.proceed() }}
-
 	private var handoff: HandoffState<V> = .Empty {
 		didSet {
 			switch handoff {
@@ -158,13 +153,11 @@ public class GCDHandoff<V>: Handoff, Unique {
 		}
 	}
 
-	// Returns true if the communication went through
 	func senderEnter(v: V) -> HandoffResult {
 		dispatch_sync(q) { self.setValue(v) }
 		return wait().withoutValue
 	}
 
-	// Returns true if the communication went through
 	func receiverEnter() -> HandoffReceiveResult<V> {
 		dispatch_sync(q) { self.hasReader() }
 		return wait()
@@ -179,7 +172,6 @@ public class GCDHandoff<V>: Handoff, Unique {
 		return result
 	}
 
-	// Returns true if the Comm was canceled
 	public func cancel() -> HandoffResult {
 		var handoff: HandoffState<V> = .Done(.Canceled)
 		dispatch_sync(q) {
@@ -193,7 +185,6 @@ public class GCDHandoff<V>: Handoff, Unique {
 		return result.withoutValue
 	}
 
-	// Returns true if the Comm was executed
 	public func proceed() -> HandoffResult {
 		var handoff: HandoffState<V> = .Done(.Canceled)
 		dispatch_sync(q) {
