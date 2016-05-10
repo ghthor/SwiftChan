@@ -55,8 +55,6 @@ public class SyncedComm<V>: Comm {
 
 	var v: V?
 	var canceled: Bool?
-	var senderCanceled: Bool?
-	var receiverCanceled: Bool?
 
 	init() {
 		enter()
