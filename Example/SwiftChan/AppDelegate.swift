@@ -8,10 +8,6 @@
 
 import UIKit
 
-private let appNameCh = GCDChan<String>()
-
-let applicationNameCh = appNameCh.asRecvOnly()
-
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
@@ -19,12 +15,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 
     func application(application: UIApplication, didFinishLaunchingWithOptions launchOptions: [NSObject: AnyObject]?) -> Bool {
-		go {
-			for ;; {
-				appNameCh.asSendOnly() <- "SwiftChan Example"
-			}
-		}
-
         return true
     }
 
