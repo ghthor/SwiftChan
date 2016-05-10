@@ -74,12 +74,11 @@ public enum HandoffValue<V> {
 
 	var isReady: Bool {
 		switch self {
-		case .Ready:
-			fallthrough
-		case .Done:
+		case .Ready, .Done:
 			return true
 
-		default: return false
+		default:
+			return false
 		}
 	}
 }
