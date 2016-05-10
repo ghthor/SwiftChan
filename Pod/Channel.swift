@@ -98,16 +98,6 @@ extension GCDChan: ReceiveChannel {
 	}
 }
 
-public protocol SelectableReceiveChannel {
-	associatedtype PausedHandoff: Handoff
-	func receive() -> PausedHandoff
-}
-
-public protocol SelectableSendChannel {
-	associatedtype PausedHandoff: Handoff
-	func send() -> PausedHandoff
-}
-
 extension GCDChan: SelectableReceiveChannel {
 	public func receive() -> GCDHandoff<Element> {
 		return handoffToReceive
@@ -122,6 +112,16 @@ extension GCDChan: SelectableSendChannel {
 
 public struct ASyncReceive<V> {
 	let callback: (V) -> Void
+}
+
+public protocol SelectableReceiveChannel {
+	associatedtype PausedHandoff: Handoff
+	func receive() -> PausedHandoff
+}
+
+public protocol SelectableSendChannel {
+	associatedtype PausedHandoff: Handoff
+	func send() -> PausedHandoff
 }
 
 public protocol SelectCase {
