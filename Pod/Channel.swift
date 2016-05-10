@@ -20,8 +20,8 @@ public protocol Comm {
 }
 
 public class SyncedComm<V>: Comm {
-	private let sender = dispatch_group_create()
-	private let receiver = dispatch_group_create()
+	private let sender = dispatch_semaphore_create(0)
+	private let receiver = dispatch_semaphore_create(0)
 
 	// Sychronizes read/write of the has[Sender|Receiver] variables
 	private let q: dispatch_queue_t = {
@@ -56,26 +56,15 @@ public class SyncedComm<V>: Comm {
 	var v: V?
 	var canceled: Bool?
 
-	init() {
-		enter()
-	}
+	init() {}
 
 	init(onReady callback: CommReadyCallback) {
 		triggerHandoff = callback
-		enter()
 	}
 
-	private func enter() {
-		dispatch_group_enter(sender)
-		dispatch_group_enter(receiver)
-	}
-
-	private var leaveOnce = dispatch_once_t()
 	private func leave() {
-		dispatch_once(&leaveOnce) {
-			dispatch_group_leave(self.sender)
-			dispatch_group_leave(self.receiver)
-		}
+		dispatch_semaphore_signal(sender)
+		dispatch_semaphore_signal(receiver)
 	}
 
 	// Override the current onReady callback
@@ -94,7 +83,7 @@ public class SyncedComm<V>: Comm {
 	private func senderEnter(v: V) -> Bool {
 		self.v = v
 		dispatch_sync(q) { self.hasSender = true }
-		dispatch_group_wait(sender, DISPATCH_TIME_FOREVER)
+		dispatch_semaphore_wait(sender, DISPATCH_TIME_FOREVER)
 		if canceled! {
 			return false
 		}
@@ -105,7 +94,7 @@ public class SyncedComm<V>: Comm {
 	// Returns true if the communication went through
 	private func receiverEnter() -> (V?, Bool) {
 		dispatch_sync(q) { self.hasReceiver = true }
-		dispatch_group_wait(receiver, DISPATCH_TIME_FOREVER)
+		dispatch_semaphore_wait(receiver, DISPATCH_TIME_FOREVER)
 		if canceled! {
 			return (nil, false)
 		}
