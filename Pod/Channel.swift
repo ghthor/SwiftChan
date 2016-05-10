@@ -270,7 +270,7 @@ public enum Send<V> {
 	case Block(WaitForRecv<V>)
 }
 
-public class chan<V>: SendChannel, RecvChannel {
+public class Chan<V>: SendChannel, RecvChannel {
 	private var receivers = [WaitForSend<V>]()
 	private var senders = [WaitForRecv<V>]()
 
@@ -282,12 +282,12 @@ public class chan<V>: SendChannel, RecvChannel {
 	public init() {
 	}
 
-	public func asRecvOnly() -> RecvOnlyChan<chan<V>> {
-		return RecvOnlyChan<chan<V>>(ch: self)
+	public func asRecvOnly() -> RecvOnlyChan<Chan<V>> {
+		return RecvOnlyChan<Chan<V>>(ch: self)
 	}
 
-	public func asSendOnly() -> SendOnlyChan<chan<V>> {
-		return SendOnlyChan<chan<V>>(ch: self)
+	public func asSendOnly() -> SendOnlyChan<Chan<V>> {
+		return SendOnlyChan<Chan<V>>(ch: self)
 	}
 
 	public func send(v: V) {
@@ -356,7 +356,7 @@ public class chan<V>: SendChannel, RecvChannel {
 
 }
 
-extension chan: SelectableRecvChannel {
+extension Chan: SelectableRecvChannel {
 	public func recv(onReady: CommReadyCallback) -> Receive<V> {
 		var action: Receive = .Block(WaitForSend<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
 
@@ -375,7 +375,7 @@ extension chan: SelectableRecvChannel {
 	}
 }
 
-extension chan: SelectableSendChannel {
+extension Chan: SelectableSendChannel {
 	public func send(onReady: CommReadyCallback) -> Send<V> {
 		var action: Send = .Block(WaitForRecv<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
 

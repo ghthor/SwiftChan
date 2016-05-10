@@ -8,7 +8,7 @@ class SynchronousChannel: QuickSpec {
 	override func spec() {
 		describe("a synchronous channel") {
 			let totalSends = 10
-			let ch = chan<Int>()
+			let ch = Chan<Int>()
 
 			describe("will send and receive") {
 				it("with one sender and one receiver") {
@@ -61,7 +61,7 @@ class SynchronousChannel: QuickSpec {
 				}
 
 				let expectAllValuesWereRead = { () -> () in
-					let fanIn = chan<Int>()
+					let fanIn = Chan<Int>()
 					for _ in 0...totalSends {
 						go {
 							let v = <-ch
@@ -107,8 +107,8 @@ class SynchronousChannel: QuickSpec {
 			}
 
 			it("can be selected") {
-				let senders = (0..<2).map { (i) -> chan<Int> in
-					let ch = chan<Int>()
+				let senders = (0..<2).map { (i) -> Chan<Int> in
+					let ch = Chan<Int>()
 
 					go {
 						ch <- i
@@ -121,8 +121,8 @@ class SynchronousChannel: QuickSpec {
 					}
 				}
 
-				let receivers = (0..<2).map { (i) -> chan<Int> in
-					let ch = chan<Int>()
+				let receivers = (0..<2).map { (i) -> Chan<Int> in
+					let ch = Chan<Int>()
 
 					go {
 						expect(<-ch) == i
@@ -133,7 +133,7 @@ class SynchronousChannel: QuickSpec {
 					return send(to: ch, value: i) {}
 				}
 
-				let noCommCh = chan<Int>()
+				let noCommCh = Chan<Int>()
 
 				// Select with only receives
 				Select {
@@ -153,9 +153,9 @@ class SynchronousChannel: QuickSpec {
 
 			it("will select eveningly random among a group of communicating channels") {
 				let chs = [
-					chan<Int>(),
-					chan<Int>(),
-					chan<Int>()
+					Chan<Int>(),
+					Chan<Int>(),
+					Chan<Int>()
 				]
 
 				chs.enumerate().forEach { (i, ch) in
