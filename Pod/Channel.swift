@@ -29,30 +29,20 @@ public class SyncedComm<V>: Comm {
 		return dispatch_queue_create("org.eksdyne.SyncedComm.\(uuid)", DISPATCH_QUEUE_SERIAL)
 	}()
 
-	private var ready: CommReadyCallback?
+	private lazy var triggerHandoff: () -> () = { go { self.proceed() }}
 
 	private var hasSender: Bool = false {
-		didSet {
-			if hasSender && hasReceiver {
-				if let ready = ready {
-					ready()
-				} else {
-					go { self.proceed() }
-				}
-			}
-		}
+		didSet { maybeTriggerHandoff() }
 	}
 
 	private var hasReceiver: Bool = false {
-		didSet {
-			if hasSender && hasReceiver {
-				if let ready = ready {
-					ready()
-				} else {
-					go { self.proceed() }
-				}
-			}
-		}
+		didSet { maybeTriggerHandoff() }
+	}
+
+	private var readyForHandoff: Bool { return hasSender && hasReceiver }
+
+	private func maybeTriggerHandoff() {
+		if readyForHandoff { triggerHandoff() }
 	}
 
 	public var isReady: Bool {
@@ -72,8 +62,8 @@ public class SyncedComm<V>: Comm {
 		enter()
 	}
 
-	init(onReady: CommReadyCallback) {
-		ready = onReady
+	init(onReady callback: CommReadyCallback) {
+		triggerHandoff = callback
 		enter()
 	}
 
@@ -95,7 +85,7 @@ public class SyncedComm<V>: Comm {
 		dispatch_sync(q) {
 			let isReady = self.hasSender && self.hasReceiver
 			if !isReady {
-				self.ready = callback
+				self.triggerHandoff = callback
 			} else {
 				go { callback() }
 			}
