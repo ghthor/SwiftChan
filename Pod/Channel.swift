@@ -9,28 +9,28 @@
 import Foundation
 
 public protocol SendChannel {
-	associatedtype Element
-	func send(value: Element)
+	associatedtype ValueType
+	func send(value: ValueType)
 }
 
-public protocol RecvChannel {
-	associatedtype Element
-	func recv() -> Element
+public protocol ReceiveChannel {
+	associatedtype ValueType
+	func receive() -> ValueType
 }
 
 public struct SendOnlyChan<C: SendChannel>: SendChannel {
 	private let ch: C
 
-	public func send(value: C.Element) {
+	public func send(value: C.ValueType) {
 		ch.send(value)
 	}
 }
 
-public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
+public struct ReceiveOnlyChan<C: ReceiveChannel>: ReceiveChannel {
 	private let ch: C
 
-	public func recv() -> C.Element {
-		return ch.recv()
+	public func receive() -> C.ValueType {
+		return ch.receive()
 	}
 }
 
@@ -73,7 +73,7 @@ extension GCDChan: SendChannel {
 	}
 }
 
-extension GCDChan: RecvChannel {
+extension GCDChan: ReceiveChannel {
 	private var handoffToReceive: GCDHandoff<Element> {
 		var handoff = GCDHandoff<Element>()
 		dispatch_sync(q) {
@@ -88,17 +88,17 @@ extension GCDChan: RecvChannel {
 		return handoff
 	}
 
-	public func recv() -> Element {
+	public func receive() -> Element {
 		switch handoffToReceive.enterAsReceiver() {
 		case .Completed(let value):
 			return value
 		default:
-			return recv()
+			return receive()
 		}
 	}
 }
 
-public protocol SelectableRecvChannel {
+public protocol SelectableReceiveChannel {
 	associatedtype PausedHandoff: Handoff
 	func receive() -> PausedHandoff
 }
@@ -108,7 +108,7 @@ public protocol SelectableSendChannel {
 	func send() -> PausedHandoff
 }
 
-extension GCDChan: SelectableRecvChannel {
+extension GCDChan: SelectableReceiveChannel {
 	public func receive() -> GCDHandoff<Element> {
 		return handoffToReceive
 	}
@@ -120,7 +120,7 @@ extension GCDChan: SelectableSendChannel {
 	}
 }
 
-public struct ASyncRecv<V> {
+public struct ASyncReceive<V> {
 	let callback: (V) -> Void
 }
 
@@ -129,7 +129,7 @@ public protocol SelectCase {
 	func wasSelected()
 }
 
-public class RecvCase<C: SelectableRecvChannel, V where C.PausedHandoff.Element == V>: SelectCase {
+public class ReceiveCase<C: SelectableReceiveChannel, V where C.PausedHandoff.Element == V>: SelectCase {
 	let ch: C
 	let received: (V) -> ()
 
@@ -166,8 +166,8 @@ public class RecvCase<C: SelectableRecvChannel, V where C.PausedHandoff.Element 
 	}
 }
 
-public func recv<C: SelectableRecvChannel, V where C.PausedHandoff.Element == V>(from channel: C, block: (V) -> ()) -> SelectCase {
-	return RecvCase<C, V>(channel: channel, onSelected: block)
+public func Receive<C: SelectableReceiveChannel, V where C.PausedHandoff.Element == V>(from channel: C, block: (V) -> ()) -> SelectCase {
+	return ReceiveCase<C, V>(channel: channel, onSelected: block)
 }
 
 public struct SendCase<C: SelectableSendChannel, V where C.PausedHandoff.Element == V>: SelectCase {
@@ -205,7 +205,7 @@ public struct SendCase<C: SelectableSendChannel, V where C.PausedHandoff.Element
 	}
 }
 
-public func send<C: SelectableSendChannel, V where C.PausedHandoff.Element == V>(to channel: C, value: V, block: () -> ()) -> SelectCase {
+public func Send<C: SelectableSendChannel, V where C.PausedHandoff.Element == V>(to channel: C, value: V, block: () -> ()) -> SelectCase {
 	return SendCase<C, V>(channel: channel, value: value, onSelected: block)
 }
 

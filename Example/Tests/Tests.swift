@@ -116,7 +116,7 @@ class SynchronousChannel: QuickSpec {
 
 					return ch
 				}.enumerate().map { (i, ch) -> SelectCase in
-					return recv(from: ch) { (v: Int) in
+					return Receive(from: ch) { (v: Int) in
 						expect(v) == i
 					}
 				}
@@ -130,24 +130,24 @@ class SynchronousChannel: QuickSpec {
 
 					return ch
 				}.enumerate().map { (i, ch) -> SelectCase in
-					return send(to: ch, value: i) {}
+					return Send(to: ch, value: i) {}
 				}
 
 				let noCommCh = GCDChan<Int>()
 
 				// Select with only receives
 				Select {
-					senders + [recv(from: noCommCh) { (_) in }]
+					senders + [Receive(from: noCommCh) { (_) in }]
 				}
 
 				// Select with only sends
 				Select {
-					receivers + [recv(from: noCommCh) { (_) in }]
+					receivers + [Receive(from: noCommCh) { (_) in }]
 				}
 
 				// Select with both sends and receives
 				Select {
-					senders + receivers + [recv(from: noCommCh) { (_) in }]
+					senders + receivers + [Receive(from: noCommCh) { (_) in }]
 				}
 			}
 
@@ -182,7 +182,7 @@ class SynchronousChannel: QuickSpec {
 					go(after: 10) {
 						Select {
 							chs.enumerate().map { (i, ch) in
-								return recv(from: ch) { (v) in
+								return Receive(from: ch) { (v) in
 									reads[i] = reads[i]! + 1
 									totalReads++
 								}
