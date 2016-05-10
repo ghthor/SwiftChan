@@ -8,186 +8,20 @@
 
 import Foundation
 
-public class WaitForSend<V> {
-	private let comm: GCDHandoff<V>
-
-	init() {
-		comm = GCDHandoff<V>()
-	}
-
-	init(syncedComm: GCDHandoff<V>) {
-		comm = syncedComm
-	}
-
-	private func send(v: V) -> HandoffResult {
-		return comm.senderEnter(v)
-	}
-
-	private func waitForSender() -> HandoffReceiveResult<V> {
-		return comm.receiverEnter()
-	}
+public protocol SendChannel {
+	associatedtype Element
+	func send(value: Element)
 }
 
-public class WaitForRecv<V> {
-	private let comm: GCDHandoff<V>
-
-	init() {
-		comm = GCDHandoff<V>()
-	}
-
-	init(syncedComm: GCDHandoff<V>) {
-		comm = syncedComm
-	}
-
-	private func recv() -> HandoffReceiveResult<V> {
-		return comm.receiverEnter()
-	}
-
-	private func waitForRecv(v: V) -> HandoffResult {
-		return comm.senderEnter(v)
-	}
-}
-
-// What is about to happen as a thread enters into a receive action on a channel.
-public enum Receive<V> {
-	case FromSender(WaitForRecv<V>)
-	case Block(WaitForSend<V>)
-}
-
-// What is about to happen as a thread enters into a send action on a channel.
-public enum Send<V> {
-	case ToReceiver(WaitForSend<V>)
-	case Block(WaitForRecv<V>)
-}
-
-public class Chan<V>: SendChannel, RecvChannel {
-	private var receivers = [WaitForSend<V>]()
-	private var senders = [WaitForRecv<V>]()
-
-	let q: dispatch_queue_t = {
-		let uuid = NSUUID().UUIDString
-		return dispatch_queue_create("org.eksdyne.SynchronousChan.\(uuid)", DISPATCH_QUEUE_SERIAL)
-	}()
-
-	public init() {
-	}
-
-	public func asRecvOnly() -> RecvOnlyChan<Chan<V>> {
-		return RecvOnlyChan<Chan<V>>(ch: self)
-	}
-
-	public func asSendOnly() -> SendOnlyChan<Chan<V>> {
-		return SendOnlyChan<Chan<V>>(ch: self)
-	}
-
-	public func send(v: V) {
-		// Prep a default action of blocking
-		var action: Send = .Block(WaitForRecv<V>())
-
-		dispatch_sync(q) {
-			switch (action, self.receivers) {
-			case let (.Block(thread), receivers) where receivers.count == 0:
-				// Proceed with a Block waiting for a receiver
-				self.senders.append(thread)
-
-			default:
-				// Proceed with a send to an existing receiver
-				action = .ToReceiver(self.receivers.removeFirst())
-			}
-		}
-
-		switch action {
-		case let .Block(thread):
-			if case .Completed = thread.waitForRecv(v) {
-				return
-			}
-
-		case let .ToReceiver(thread):
-			if case .Completed = thread.send(v) {
-				return
-			}
-		}
-
-		// When thread.waitForRecv(v) or thread.send(v) return false
-		// the communication was canceled so the thread recurses into
-		// another attempt to send the value.
-		send(v)
-	}
-
-	public func recv() -> V {
-		var action: Receive = .Block(WaitForSend<V>())
-
-		dispatch_sync(q) {
-			switch (action, self.senders) {
-
-			case let (.Block(thread), senders) where senders.count == 0:
-				self.receivers.append(thread)
-
-			default:
-				action = .FromSender(self.senders.removeFirst())
-
-			}
-		}
-
-		switch action {
-		case let .Block(thread):
-			if case let .Completed(v) = thread.waitForSender() {
-				return v
-			}
-
-		case let .FromSender(thread):
-			if case let .Completed(v) = thread.recv() {
-				return v
-			}
-		}
-
-		return recv()
-	}
-
-}
-
-extension Chan: SelectableRecvChannel {
-	public func recv(onReady: () -> ()) -> Receive<V> {
-		var action: Receive = .Block(WaitForSend<V>(syncedComm: GCDHandoff<V>(onReady: onReady)))
-
-		dispatch_sync(q) {
-			switch (action, self.senders) {
-			case let (.Block(thread), senders) where senders.count == 0:
-				self.receivers.append(thread)
-			default:
-				let sender = self.senders.removeFirst()
-				sender.comm.onReady(onReady)
-				action = .FromSender(sender)
-			}
-		}
-
-		return action
-	}
-}
-
-extension Chan: SelectableSendChannel {
-	public func send(onReady: () -> ()) -> Send<V> {
-		var action: Send = .Block(WaitForRecv<V>(syncedComm: GCDHandoff<V>(onReady: onReady)))
-
-		dispatch_sync(q) {
-			switch (action, self.receivers) {
-			case let (.Block(thread), receivers) where receivers.count == 0:
-				self.senders.append(thread)
-			default:
-				let receiver = self.receivers.removeFirst()
-				receiver.comm.onReady(onReady)
-				action = .ToReceiver(receiver)
-			}
-		}
-
-		return action
-	}
+public protocol RecvChannel {
+	associatedtype Element
+	func recv() -> Element
 }
 
 public struct SendOnlyChan<C: SendChannel>: SendChannel {
 	private let ch: C
 
-	public func send(value: C.ValueType) {
+	public func send(value: C.Element) {
 		ch.send(value)
 	}
 }
@@ -195,29 +29,106 @@ public struct SendOnlyChan<C: SendChannel>: SendChannel {
 public struct RecvOnlyChan<C: RecvChannel>: RecvChannel {
 	private let ch: C
 
-	public func recv() -> C.ValueType {
+	public func recv() -> C.Element {
 		return ch.recv()
 	}
 }
 
-public protocol SendChannel {
-	associatedtype ValueType
-	func send(value: ValueType)
+extension SendChannel {
+	public func asSendOnly() -> SendOnlyChan<Self> {
+		return SendOnlyChan(ch: self)
+	}
 }
 
-public protocol RecvChannel {
-	associatedtype ValueType
-	func recv() -> ValueType
+extension RecvChannel {
+	public func asRecvOnly() -> RecvOnlyChan<Self> {
+		return RecvOnlyChan(ch: self)
+	}
+}
+
+public class GCDChan<Element> {
+	private var waiting = (receivers: [GCDHandoff<Element>](),
+	                       senders: [GCDHandoff<Element>]())
+
+	let q: dispatch_queue_t = {
+		let uuid = NSUUID().UUIDString
+		return dispatch_queue_create("org.eksdyne.SynchronousChan.\(uuid)", DISPATCH_QUEUE_SERIAL)
+	}()
+
+	public init() {}
+}
+
+extension GCDChan: SendChannel {
+	private var handoffToSend: GCDHandoff<Element> {
+		var handoff = GCDHandoff<Element>()
+
+		dispatch_sync(q) {
+			switch self.waiting.receivers.count {
+			case 0:
+				self.waiting.senders.append(handoff)
+			default:
+				handoff = self.waiting.receivers.removeFirst()
+			}
+		}
+
+		return handoff
+	}
+
+	public func send(v: Element) {
+		switch handoffToSend.enterAsSenderOf(v) {
+		case .Completed:
+			return
+		default:
+			send(v)
+		}
+	}
+}
+
+extension GCDChan: RecvChannel {
+	private var handoffToReceive: GCDHandoff<Element> {
+		var handoff = GCDHandoff<Element>()
+		dispatch_sync(q) {
+			switch self.waiting.senders.count {
+			case 0:
+				self.waiting.receivers.append(handoff)
+			default:
+				handoff = self.waiting.senders.removeFirst()
+			}
+		}
+
+		return handoff
+	}
+
+	public func recv() -> Element {
+		switch handoffToReceive.enterAsReceiver() {
+		case .Completed(let value):
+			return value
+		default:
+			return recv()
+		}
+	}
 }
 
 public protocol SelectableRecvChannel {
-	associatedtype ValueType
-	func recv(_: () -> ()) -> Receive<ValueType>
+	associatedtype PausedHandoff: Handoff
+	func receive() -> PausedHandoff
 }
 
 public protocol SelectableSendChannel {
-	associatedtype ValueType
-	func send(_: () -> ()) -> Send<ValueType>
+	associatedtype PausedHandoff: Handoff
+	func send() -> PausedHandoff
+}
+
+extension GCDChan: SelectableRecvChannel {
+	public func receive() -> GCDHandoff<Element> {
+		return handoffToReceive
+	}
+}
+
+extension GCDChan: SelectableSendChannel {
+	public func send() -> GCDHandoff<Element> {
+		return handoffToSend
+	}
 }
 
 public struct ASyncRecv<V> {
@@ -225,11 +136,11 @@ public struct ASyncRecv<V> {
 }
 
 public protocol SelectCase {
-	func start(onReady: () -> ()) -> Handoff
+	func start(onReady: () -> ()) -> SelectableHandoff
 	func wasSelected()
 }
 
-public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: SelectCase {
+public class RecvCase<C: SelectableRecvChannel, V where C.PausedHandoff.Element == V>: SelectCase {
 	let ch: C
 	let received: (V) -> ()
 
@@ -241,25 +152,19 @@ public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: Selec
 		received = onSelected
 	}
 
-	public func start(onReady: () -> ()) -> Handoff {
+	public func start(onReady: () -> ()) -> SelectableHandoff {
 		dispatch_group_enter(needResult)
 		result = .Canceled
 
-		func haveResult(result: HandoffReceiveResult<V>) {
-			self.result = result
+		let handoff = ch.receive()
+		handoff.select.onReady(onReady)
+
+		go {
+			self.result = handoff.enterAsReceiver()
 			dispatch_group_leave(self.needResult)
-			onReady()
 		}
 
-		switch ch.recv(onReady) {
-		case let .Block(thread):
-			go { haveResult(thread.waitForSender()) }
-			return thread.comm
-
-		case let .FromSender(thread):
-			go { haveResult(thread.recv()) }
-			return thread.comm
-		}
+		return handoff.select
 	}
 
 	public func wasSelected() {
@@ -272,11 +177,11 @@ public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: Selec
 	}
 }
 
-public func recv<C: SelectableRecvChannel, V where C.ValueType == V>(from channel: C, block: (V) -> ()) -> SelectCase {
+public func recv<C: SelectableRecvChannel, V where C.PausedHandoff.Element == V>(from channel: C, block: (V) -> ()) -> SelectCase {
 	return RecvCase<C, V>(channel: channel, onSelected: block)
 }
 
-public struct SendCase<C: SelectableSendChannel, V where C.ValueType == V>: SelectCase {
+public struct SendCase<C: SelectableSendChannel, V where C.PausedHandoff.Element == V>: SelectCase {
 	let ch: C
 	let valueSent: () -> ()
 
@@ -289,32 +194,18 @@ public struct SendCase<C: SelectableSendChannel, V where C.ValueType == V>: Sele
 		valueSent = onSelected
 	}
 
-
-	public func start(onReady: () -> ()) -> Handoff {
+	public func start(onReady: () -> ()) -> SelectableHandoff {
 		dispatch_group_enter(self.sentValue)
 
-		func sentValue() {
+		let handoff = ch.send()
+		handoff.select.onReady(onReady)
+
+		go {
+			handoff.enterAsSenderOf(self.v)
 			dispatch_group_leave(self.sentValue)
-			onReady()
 		}
 
-		switch ch.send(onReady) {
-		case let .Block(thread):
-			go {
-				thread.waitForRecv(self.v)
-				sentValue()
-			}
-
-			return thread.comm
-
-		case let .ToReceiver(thread):
-			go {
-				thread.send(self.v)
-				sentValue()
-			}
-
-			return thread.comm
-		}
+		return handoff.select
 	}
 
 	public func wasSelected() {
@@ -325,7 +216,7 @@ public struct SendCase<C: SelectableSendChannel, V where C.ValueType == V>: Sele
 	}
 }
 
-public func send<C: SelectableSendChannel, V where C.ValueType == V>(to channel: C, value: V, block: () -> ()) -> SelectCase {
+public func send<C: SelectableSendChannel, V where C.PausedHandoff.Element == V>(to channel: C, value: V, block: () -> ()) -> SelectCase {
 	return SendCase<C, V>(channel: channel, value: value, onSelected: block)
 }
 
@@ -336,7 +227,7 @@ public func Select (cases: () -> [SelectCase]) {
 private func selectCases(cases: [SelectCase]) {
 	let commSema = dispatch_semaphore_create(0)
 
-	let comms = cases.map { (c) -> (SelectCase, Handoff) in
+	let comms = cases.map { (c) -> (SelectCase, SelectableHandoff) in
 		return (c, c.start {
 			dispatch_semaphore_signal(commSema)
 		})

@@ -8,7 +8,7 @@
 
 import UIKit
 
-private let appNameCh = Chan<String>()
+private let appNameCh = GCDChan<String>()
 
 let applicationNameCh = appNameCh.asRecvOnly()
 

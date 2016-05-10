@@ -8,6 +8,22 @@
 
 import Foundation
 
+public protocol SelectableHandoff {
+	var isReady: Bool { get }
+	func onReady(_: () -> ())
+
+	func cancel() -> HandoffResult
+	func proceed() -> HandoffResult
+}
+
+public protocol Handoff {
+	associatedtype Element
+	func enterAsSenderOf(v: Element) -> HandoffResult
+	func enterAsReceiver() -> HandoffReceiveResult<Element>
+
+	var select: SelectableHandoff { get }
+}
+
 // The result of a handoff without access to the value.
 public enum HandoffResult {
 	case Canceled
@@ -83,15 +99,7 @@ public enum HandoffValue<V> {
 	}
 }
 
-public protocol Handoff {
-	var isReady: Bool { get }
-	func onReady(_: () -> ())
-
-	func cancel() -> HandoffResult
-	func proceed() -> HandoffResult
-}
-
-public class GCDHandoff<V>: Handoff, Unique {
+public class GCDHandoff<V>: Unique {
 	private let partner = dispatch_semaphore_create(0)
 
 	private let q = dispatch_queue_create("\(GCDHandoff<V>.newURI).lock", DISPATCH_QUEUE_SERIAL)
@@ -122,14 +130,6 @@ public class GCDHandoff<V>: Handoff, Unique {
 		return handoff
 	}
 
-	public var isReady: Bool {
-		get {
-			var ready: Bool = false
-			dispatch_sync(q) { ready = self.handoff.isReady }
-			return ready
-		}
-	}
-
 	init() {}
 
 	init(onReady callback: () -> ()) {
@@ -141,6 +141,16 @@ public class GCDHandoff<V>: Handoff, Unique {
 		dispatch_semaphore_signal(partner)
 		dispatch_semaphore_signal(partner)
 	}
+}
+
+extension GCDHandoff: SelectableHandoff {
+	public var isReady: Bool {
+		get {
+			var ready: Bool = false
+			dispatch_sync(q) { ready = self.handoff.isReady }
+			return ready
+		}
+	}
 
 	// Override the current onReady callback
 	public func onReady(callback: () -> ()) {
@@ -150,25 +160,6 @@ public class GCDHandoff<V>: Handoff, Unique {
 				go { callback() }
 			}
 		}
-	}
-
-	func senderEnter(v: V) -> HandoffResult {
-		dispatch_sync(q) { self.setValue(v) }
-		return wait().withoutValue
-	}
-
-	func receiverEnter() -> HandoffReceiveResult<V> {
-		dispatch_sync(q) { self.hasReader() }
-		return wait()
-	}
-
-	private func wait() -> HandoffReceiveResult<V> {
-		dispatch_semaphore_wait(partner, DISPATCH_TIME_FOREVER)
-		guard case .Done(let result) = handoff else {
-			return .Canceled
-		}
-
-		return result
 	}
 
 	public func cancel() -> HandoffResult {
@@ -196,4 +187,27 @@ public class GCDHandoff<V>: Handoff, Unique {
 
 		return result.withoutValue
 	}
+}
+
+extension GCDHandoff: Handoff {
+	public func enterAsSenderOf(v: V) -> HandoffResult {
+		dispatch_sync(q) { self.setValue(v) }
+		return wait().withoutValue
+	}
+
+	public func enterAsReceiver() -> HandoffReceiveResult<V> {
+		dispatch_sync(q) { self.hasReader() }
+		return wait()
+	}
+
+	private func wait() -> HandoffReceiveResult<V> {
+		dispatch_semaphore_wait(partner, DISPATCH_TIME_FOREVER)
+		guard case .Done(let result) = handoff else {
+			return .Canceled
+		}
+
+		return result
+	}
+
+	public var select: SelectableHandoff { return self }
 }
