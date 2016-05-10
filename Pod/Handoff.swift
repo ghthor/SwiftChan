@@ -84,12 +84,9 @@ public enum HandoffState<V> {
 	}
 }
 
-// TODO: Remove
-public typealias CommReadyCallback = () -> ()
-
 public protocol Handoff {
 	var isReady: Bool { get }
-	func onReady(_: CommReadyCallback)
+	func onReady(_: () -> ())
 
 	// Returns true if the Comm was canceled
 	func cancel() -> HandoffResult
@@ -141,7 +138,7 @@ public class SyncedComm<V>: Handoff, Unique {
 
 	init() {}
 
-	init(onReady callback: CommReadyCallback) {
+	init(onReady callback: () -> ()) {
 		triggerHandoff = callback
 	}
 
@@ -152,7 +149,7 @@ public class SyncedComm<V>: Handoff, Unique {
 	}
 
 	// Override the current onReady callback
-	public func onReady(callback: CommReadyCallback) {
+	public func onReady(callback: () -> ()) {
 		dispatch_sync(q) {
 			self.triggerHandoff = callback
 			if case .Ready = self.handoff {

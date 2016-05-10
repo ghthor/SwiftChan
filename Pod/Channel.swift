@@ -147,7 +147,7 @@ public class Chan<V>: SendChannel, RecvChannel {
 }
 
 extension Chan: SelectableRecvChannel {
-	public func recv(onReady: CommReadyCallback) -> Receive<V> {
+	public func recv(onReady: () -> ()) -> Receive<V> {
 		var action: Receive = .Block(WaitForSend<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
 
 		dispatch_sync(q) {
@@ -166,7 +166,7 @@ extension Chan: SelectableRecvChannel {
 }
 
 extension Chan: SelectableSendChannel {
-	public func send(onReady: CommReadyCallback) -> Send<V> {
+	public func send(onReady: () -> ()) -> Send<V> {
 		var action: Send = .Block(WaitForRecv<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
 
 		dispatch_sync(q) {
@@ -212,12 +212,12 @@ public protocol RecvChannel {
 
 public protocol SelectableRecvChannel {
 	associatedtype ValueType
-	func recv(_: CommReadyCallback) -> Receive<ValueType>
+	func recv(_: () -> ()) -> Receive<ValueType>
 }
 
 public protocol SelectableSendChannel {
 	associatedtype ValueType
-	func send(_: CommReadyCallback) -> Send<ValueType>
+	func send(_: () -> ()) -> Send<ValueType>
 }
 
 public struct ASyncRecv<V> {
@@ -225,7 +225,7 @@ public struct ASyncRecv<V> {
 }
 
 public protocol SelectCase {
-	func start(onReady: CommReadyCallback) -> Handoff
+	func start(onReady: () -> ()) -> Handoff
 	func wasSelected()
 }
 
@@ -241,7 +241,7 @@ public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: Selec
 		received = onSelected
 	}
 
-	public func start(onReady: CommReadyCallback) -> Handoff {
+	public func start(onReady: () -> ()) -> Handoff {
 		dispatch_group_enter(needResult)
 		result = .Canceled
 
@@ -290,7 +290,7 @@ public struct SendCase<C: SelectableSendChannel, V where C.ValueType == V>: Sele
 	}
 
 
-	public func start(onReady: CommReadyCallback) -> Handoff {
+	public func start(onReady: () -> ()) -> Handoff {
 		dispatch_group_enter(self.sentValue)
 
 		func sentValue() {
