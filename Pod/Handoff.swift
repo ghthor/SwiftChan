@@ -28,42 +28,42 @@ public enum HandoffReceiveResult<V> {
 	}
 }
 
-public enum HandoffState<V> {
-	case Empty
+public enum HandoffValue<V> {
+	case Waiting
 
-	case Reader
-	case Value(V)
+	case HasReader
+	case HasValue(V)
 
 	case Ready(V)
 
 	case Done(HandoffReceiveResult<V>)
 
-	func setValue(v: V) -> HandoffState {
+	func setValue(v: V) -> HandoffValue {
 		switch self {
-		case .Reader:
+		case .HasReader:
 			return .Ready(v)
 		default:
-			return .Value(v)
+			return .HasValue(v)
 		}
 	}
 
-	func hasReader() -> HandoffState {
+	func hasReader() -> HandoffValue {
 		switch self {
-		case let .Value(v):
+		case let .HasValue(v):
 			return Ready(v)
 		default:
-			return .Reader
+			return .HasReader
 		}
 	}
 
-	func cancel() -> HandoffState {
+	func cancel() -> HandoffValue {
 		switch self {
 		case .Done: return self
 		default:    return .Done(.Canceled)
 		}
 	}
 
-	func complete() -> HandoffState {
+	func complete() -> HandoffValue {
 		switch self {
 		case .Ready(let v):
 			return .Done(.Completed(v))
@@ -97,7 +97,7 @@ public class GCDHandoff<V>: Handoff, Unique {
 
 	private let q = dispatch_queue_create("\(GCDHandoff<V>.newURI).lock", DISPATCH_QUEUE_SERIAL)
 	private lazy var triggerHandoff: () -> () = { go { self.proceed() }}
-	private var handoff: HandoffState<V> = .Empty {
+	private var handoff: HandoffValue<V> = .Waiting {
 		didSet {
 			switch handoff {
 			case .Ready:
@@ -113,12 +113,12 @@ public class GCDHandoff<V>: Handoff, Unique {
 
 	private func setValue(v: V) { handoff = handoff.setValue(v) }
 	private func hasReader()    { handoff = handoff.hasReader() }
-	private func cancelHandoff() -> HandoffState<V> {
+	private func cancelHandoff() -> HandoffValue<V> {
 		handoff = handoff.cancel()
 		return handoff
 	}
 
-	private func completedHandoff() -> HandoffState<V> {
+	private func completedHandoff() -> HandoffValue<V> {
 		handoff = handoff.complete()
 		return handoff
 	}
@@ -173,7 +173,7 @@ public class GCDHandoff<V>: Handoff, Unique {
 	}
 
 	public func cancel() -> HandoffResult {
-		var handoff: HandoffState<V> = .Done(.Canceled)
+		var handoff: HandoffValue<V> = .Done(.Canceled)
 		dispatch_sync(q) {
 			handoff = self.cancelHandoff()
 		}
@@ -186,7 +186,7 @@ public class GCDHandoff<V>: Handoff, Unique {
 	}
 
 	public func proceed() -> HandoffResult {
-		var handoff: HandoffState<V> = .Done(.Canceled)
+		var handoff: HandoffValue<V> = .Done(.Canceled)
 		dispatch_sync(q) {
 			handoff = self.completedHandoff()
 		}
