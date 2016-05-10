@@ -187,13 +187,13 @@ public class WaitForRecv<V> {
 }
 
 // What is about to happen as a thread enters into a receive action on a channel.
-private enum Receive<V> {
+public enum Receive<V> {
 	case FromSender(WaitForRecv<V>)
 	case Block(WaitForSend<V>)
 }
 
 // What is about to happen as a thread enters into a send action on a channel.
-private enum Send<V> {
+public enum Send<V> {
 	case ToReceiver(WaitForSend<V>)
 	case Block(WaitForRecv<V>)
 }
@@ -280,40 +280,40 @@ public class chan<V>: SendChannel, RecvChannel {
 }
 
 extension chan: SelectableRecvChannel {
-	public func recv(onReady: CommReadyCallback) -> (WaitForRecv<V>?, WaitForSend<V>?) {
-		var sender: WaitForRecv<V>?
-		var receiver: WaitForSend<V>?
+	public func recv(onReady: CommReadyCallback) -> Receive<V> {
+		var action: Receive = .Block(WaitForSend<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
 
 		dispatch_sync(q) {
-			if self.senders.count > 0 {
-				sender = self.senders.removeAtIndex(0)
-				sender!.comm.onReady(onReady)
-			} else {
-				receiver = WaitForSend<V>(syncedComm: SyncedComm<V>(onReady: onReady))
-				self.receivers.append(receiver!)
+			switch (action, self.senders) {
+			case let (.Block(thread), senders) where senders.count == 0:
+				self.receivers.append(thread)
+			default:
+				let sender = self.senders.removeFirst()
+				sender.comm.onReady(onReady)
+				action = .FromSender(sender)
 			}
 		}
 
-		return (sender, receiver)
+		return action
 	}
 }
 
 extension chan: SelectableSendChannel {
-	public func send(onReady: CommReadyCallback) -> (WaitForSend<V>?, WaitForRecv<V>?) {
-		var receiver: WaitForSend<V>?
-		var sender: WaitForRecv<V>?
+	public func send(onReady: CommReadyCallback) -> Send<V> {
+		var action: Send = .Block(WaitForRecv<V>(syncedComm: SyncedComm<V>(onReady: onReady)))
 
 		dispatch_sync(q) {
-			if self.receivers.count > 0 {
-				receiver = self.receivers.removeAtIndex(0)
-				receiver!.comm.onReady(onReady)
-			} else {
-				sender = WaitForRecv<V>(syncedComm: SyncedComm<V>(onReady: onReady))
-				self.senders.append(sender!)
+			switch (action, self.receivers) {
+			case let (.Block(thread), receivers) where receivers.count == 0:
+				self.senders.append(thread)
+			default:
+				let receiver = self.receivers.removeFirst()
+				receiver.comm.onReady(onReady)
+				action = .ToReceiver(receiver)
 			}
 		}
 
-		return (receiver, sender)
+		return action
 	}
 }
 
@@ -345,12 +345,12 @@ public protocol RecvChannel {
 
 public protocol SelectableRecvChannel {
 	associatedtype ValueType
-	func recv(_: CommReadyCallback) -> (WaitForRecv<ValueType>?, WaitForSend<ValueType>?)
+	func recv(_: CommReadyCallback) -> Receive<ValueType>
 }
 
 public protocol SelectableSendChannel {
 	associatedtype ValueType
-	func send(_: CommReadyCallback) -> (WaitForSend<ValueType>?, WaitForRecv<ValueType>?)
+	func send(_: CommReadyCallback) -> Send<ValueType>
 }
 
 public struct ASyncRecv<V> {
@@ -375,29 +375,31 @@ public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: Selec
 	}
 
 	public func start(onReady: CommReadyCallback) -> Comm {
-		v = nil
 		dispatch_group_enter(receivedValue)
+		v = nil
 
-		let (sender, receiver) = ch.recv(onReady)
-		if let sender = sender {
+		func haveValue(v: V?) {
+			self.v = v
+			dispatch_group_leave(self.receivedValue)
+			onReady()
+		}
+
+		switch ch.recv(onReady) {
+		case let .Block(thread):
 			go {
-				let (v, _) = sender.recv()
-				self.v = v
-				dispatch_group_leave(self.receivedValue)
-				onReady()
+				let (v, _) = thread.waitForSender()
+				haveValue(v)
 			}
 
-			return sender.comm
+			return thread.comm
 
-		} else {
+		case let .FromSender(thread):
 			go {
-				let (v, _) = receiver!.waitForSender()
-				self.v = v
-				dispatch_group_leave(self.receivedValue)
-				onReady()
+				let (v, _) = thread.recv()
+				haveValue(v)
 			}
 
-			return receiver!.comm
+			return thread.comm
 		}
 	}
 
@@ -428,26 +430,29 @@ public struct SendCase<C: SelectableSendChannel, V where C.ValueType == V>: Sele
 
 
 	public func start(onReady: CommReadyCallback) -> Comm {
-		dispatch_group_enter(sentValue)
+		dispatch_group_enter(self.sentValue)
 
-		let (receiver, sender) = ch.send(onReady)
-		if let receiver = receiver {
+		func sentValue() {
+			dispatch_group_leave(self.sentValue)
+			onReady()
+		}
+
+		switch ch.send(onReady) {
+		case let .Block(thread):
 			go {
-				receiver.send(self.v)
-				dispatch_group_leave(self.sentValue)
-				onReady()
+				thread.waitForRecv(self.v)
+				sentValue()
 			}
 
-			return receiver.comm
+			return thread.comm
 
-		} else {
+		case let .ToReceiver(thread):
 			go {
-				sender!.waitForRecv(self.v)
-				dispatch_group_leave(self.sentValue)
-				onReady()
+				thread.send(self.v)
+				sentValue()
 			}
 
-			return sender!.comm
+			return thread.comm
 		}
 	}
 
