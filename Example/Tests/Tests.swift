@@ -194,7 +194,7 @@ class SynchronousChannel: QuickSpec {
 
 					dispatch_group_wait(syncGroup, DISPATCH_TIME_FOREVER)
 
-					if totalReads >= 40 {
+					if totalReads >= 200 {
 						break
 					}
 				}
