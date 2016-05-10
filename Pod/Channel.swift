@@ -35,7 +35,7 @@ public enum HandoffReceiveResult<V> {
 	}
 }
 
-public enum Handoff<V> {
+public enum HandoffState<V> {
 	case Empty
 
 	case Reader
@@ -45,7 +45,7 @@ public enum Handoff<V> {
 
 	case Done(HandoffReceiveResult<V>)
 
-	func setValue(v: V) -> Handoff {
+	func setValue(v: V) -> HandoffState {
 		switch self {
 		case .Reader:
 			return .Ready(v)
@@ -54,7 +54,7 @@ public enum Handoff<V> {
 		}
 	}
 
-	func hasReader() -> Handoff {
+	func hasReader() -> HandoffState {
 		switch self {
 		case let .Value(v):
 			return Ready(v)
@@ -63,14 +63,14 @@ public enum Handoff<V> {
 		}
 	}
 
-	func cancel() -> Handoff {
+	func cancel() -> HandoffState {
 		switch self {
 		case .Done: return self
 		default:    return .Done(.Canceled)
 		}
 	}
 
-	func complete() -> Handoff {
+	func complete() -> HandoffState {
 		switch self {
 		case .Ready(let v):
 			return .Done(.Completed(v))
@@ -112,7 +112,7 @@ public class SyncedComm<V>: Comm, Unique {
 
 	private lazy var triggerHandoff: () -> () = { go { self.proceed() }}
 
-	private var handoff: Handoff<V> = .Empty {
+	private var handoff: HandoffState<V> = .Empty {
 		didSet {
 			switch handoff {
 			case .Ready:
@@ -128,12 +128,12 @@ public class SyncedComm<V>: Comm, Unique {
 
 	private func setValue(v: V) { handoff = handoff.setValue(v) }
 	private func hasReader()    { handoff = handoff.hasReader() }
-	private func cancelHandoff() -> Handoff<V> {
+	private func cancelHandoff() -> HandoffState<V> {
 		handoff = handoff.cancel()
 		return handoff
 	}
 
-	private func completedHandoff() -> Handoff<V> {
+	private func completedHandoff() -> HandoffState<V> {
 		handoff = handoff.complete()
 		return handoff
 	}
@@ -191,7 +191,7 @@ public class SyncedComm<V>: Comm, Unique {
 
 	// Returns true if the Comm was canceled
 	public func cancel() -> HandoffResult {
-		var handoff: Handoff<V> = .Done(.Canceled)
+		var handoff: HandoffState<V> = .Done(.Canceled)
 		dispatch_sync(q) {
 			handoff = self.cancelHandoff()
 		}
@@ -205,7 +205,7 @@ public class SyncedComm<V>: Comm, Unique {
 
 	// Returns true if the Comm was executed
 	public func proceed() -> HandoffResult {
-		var handoff: Handoff<V> = .Done(.Canceled)
+		var handoff: HandoffState<V> = .Done(.Canceled)
 		dispatch_sync(q) {
 			handoff = self.completedHandoff()
 		}
