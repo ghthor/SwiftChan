@@ -19,6 +19,7 @@
 		EB232BB11CD32B7D004DE08D /* goroutine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB232BB01CD32B7D004DE08D /* goroutine.swift */; };
 		EB37F0001CE1C8FF00DFE542 /* util.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB37EFFF1CE1C8FF00DFE542 /* util.swift */; };
 		EB37F0021CE1C98100DFE542 /* Handoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB37F0011CE1C98100DFE542 /* Handoff.swift */; };
+		EB37F0051CE28BCF00DFE542 /* Select.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB37F0031CE27DF100DFE542 /* Select.swift */; };
 		EBDE0C7C1B9620150022BB08 /* Channel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBDE0C7B1B9620150022BB08 /* Channel.swift */; };
 /* End PBXBuildFile section */
 
@@ -54,6 +55,7 @@
 		EB232BB01CD32B7D004DE08D /* goroutine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = goroutine.swift; sourceTree = "<group>"; };
 		EB37EFFF1CE1C8FF00DFE542 /* util.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = util.swift; sourceTree = "<group>"; };
 		EB37F0011CE1C98100DFE542 /* Handoff.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Handoff.swift; sourceTree = "<group>"; };
+		EB37F0031CE27DF100DFE542 /* Select.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Select.swift; sourceTree = "<group>"; };
 		EB5B7E4F9C85C378E3334838 /* SwiftChan.podspec */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = SwiftChan.podspec; path = ../SwiftChan.podspec; sourceTree = "<group>"; };
 		EBDE0C7B1B9620150022BB08 /* Channel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Channel.swift; sourceTree = "<group>"; };
 		FED5F3A7EF6CBAE677631BF1 /* Pods-SwiftChan_Example.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SwiftChan_Example.release.xcconfig"; path = "Pods/Target Support Files/Pods-SwiftChan_Example/Pods-SwiftChan_Example.release.xcconfig"; sourceTree = "<group>"; };
@@ -178,6 +180,7 @@
 				EBDE0C7B1B9620150022BB08 /* Channel.swift */,
 				EB37EFFF1CE1C8FF00DFE542 /* util.swift */,
 				EB37F0011CE1C98100DFE542 /* Handoff.swift */,
+				EB37F0031CE27DF100DFE542 /* Select.swift */,
 			);
 			name = package;
 			path = ../Pod;
@@ -389,6 +392,7 @@
 				EB37F0021CE1C98100DFE542 /* Handoff.swift in Sources */,
 				EB232BB11CD32B7D004DE08D /* goroutine.swift in Sources */,
 				607FACD61AFB9204008FA782 /* AppDelegate.swift in Sources */,
+				EB37F0051CE28BCF00DFE542 /* Select.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
