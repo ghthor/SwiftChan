@@ -87,7 +87,7 @@ public enum HandoffState<V> {
 // TODO: Remove
 public typealias CommReadyCallback = () -> ()
 
-public protocol Comm {
+public protocol Handoff {
 	var isReady: Bool { get }
 	func onReady(_: CommReadyCallback)
 
@@ -97,7 +97,7 @@ public protocol Comm {
 	func proceed() -> HandoffResult
 }
 
-public class SyncedComm<V>: Comm, Unique {
+public class SyncedComm<V>: Handoff, Unique {
 	private let partner = dispatch_semaphore_create(0)
 
 	// Sychronizes read/write of the has[Sender|Receiver] variables

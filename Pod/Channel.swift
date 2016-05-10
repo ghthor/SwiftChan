@@ -225,7 +225,7 @@ public struct ASyncRecv<V> {
 }
 
 public protocol SelectCase {
-	func start(onReady: CommReadyCallback) -> Comm
+	func start(onReady: CommReadyCallback) -> Handoff
 	func wasSelected()
 }
 
@@ -241,7 +241,7 @@ public class RecvCase<C: SelectableRecvChannel, V where C.ValueType == V>: Selec
 		received = onSelected
 	}
 
-	public func start(onReady: CommReadyCallback) -> Comm {
+	public func start(onReady: CommReadyCallback) -> Handoff {
 		dispatch_group_enter(needResult)
 		result = .Canceled
 
@@ -290,7 +290,7 @@ public struct SendCase<C: SelectableSendChannel, V where C.ValueType == V>: Sele
 	}
 
 
-	public func start(onReady: CommReadyCallback) -> Comm {
+	public func start(onReady: CommReadyCallback) -> Handoff {
 		dispatch_group_enter(self.sentValue)
 
 		func sentValue() {
@@ -336,7 +336,7 @@ public func Select (cases: () -> [SelectCase]) {
 private func selectCases(cases: [SelectCase]) {
 	let commSema = dispatch_semaphore_create(0)
 
-	let comms = cases.map { (c) -> (SelectCase, Comm) in
+	let comms = cases.map { (c) -> (SelectCase, Handoff) in
 		return (c, c.start {
 			dispatch_semaphore_signal(commSema)
 		})
