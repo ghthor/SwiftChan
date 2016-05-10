@@ -8,12 +8,12 @@
 
 import Foundation
 
-public protocol SelectableReceiveChannel {
+public protocol SupportSelectReceive {
 	associatedtype PausedHandoff: Handoff
 	func receive() -> PausedHandoff
 }
 
-public protocol SelectableSendChannel {
+public protocol SupportSelectSend {
 	associatedtype PausedHandoff: Handoff
 	func send() -> PausedHandoff
 }
@@ -23,7 +23,7 @@ public protocol SelectCase {
 	func wasSelected()
 }
 
-public class ReceiveCase<C: SelectableReceiveChannel, V where C.PausedHandoff.Element == V>: SelectCase {
+public class ReceiveCase<C: SupportSelectReceive, V where C.PausedHandoff.Element == V>: SelectCase {
 	let ch: C
 	let received: (V) -> ()
 
@@ -60,11 +60,11 @@ public class ReceiveCase<C: SelectableReceiveChannel, V where C.PausedHandoff.El
 	}
 }
 
-public func Receive<C: SelectableReceiveChannel, V where C.PausedHandoff.Element == V>(from channel: C, block: (V) -> ()) -> SelectCase {
+public func Receive<C: SupportSelectReceive, V where C.PausedHandoff.Element == V>(from channel: C, block: (V) -> ()) -> SelectCase {
 	return ReceiveCase<C, V>(channel: channel, onSelected: block)
 }
 
-public struct SendCase<C: SelectableSendChannel, V where C.PausedHandoff.Element == V>: SelectCase {
+public struct SendCase<C: SupportSelectSend, V where C.PausedHandoff.Element == V>: SelectCase {
 	let ch: C
 	let valueSent: () -> ()
 
@@ -99,7 +99,7 @@ public struct SendCase<C: SelectableSendChannel, V where C.PausedHandoff.Element
 	}
 }
 
-public func Send<C: SelectableSendChannel, V where C.PausedHandoff.Element == V>(to channel: C, value: V, block: () -> ()) -> SelectCase {
+public func Send<C: SupportSelectSend, V where C.PausedHandoff.Element == V>(to channel: C, value: V, block: () -> ()) -> SelectCase {
 	return SendCase<C, V>(channel: channel, value: value, onSelected: block)
 }
 

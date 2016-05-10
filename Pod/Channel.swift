@@ -8,29 +8,31 @@
 
 import Foundation
 
-public protocol SendOnlyChannel {
+public protocol SupportSend {
 	associatedtype ValueType
 	func send(value: ValueType)
 }
 
-public protocol ReceiveOnlyChannel {
+public protocol SupportReceive {
 	associatedtype ValueType
 	func receive() -> ValueType
 }
 
-extension SendOnlyChannel {
+extension SupportSend {
+	public var sendOnly: Self { return self }
 	public func asSendOnly() -> Self {
 		return self
 	}
 }
 
-extension ReceiveOnlyChannel {
+extension SupportReceive {
+	public var receiveOnly: Self { return self }
 	public func asReceiveOnly() -> Self {
 		return self
 	}
 }
 
-typealias RWChannel = protocol<SendOnlyChannel, ReceiveOnlyChannel>
+typealias RWChannel = protocol<SupportSend, SupportReceive>
 
 public class GCDChan<Element> {
 	private var waiting = (receivers: [GCDHandoff<Element>](),
@@ -44,7 +46,7 @@ public class GCDChan<Element> {
 	public init() {}
 }
 
-extension GCDChan: SendOnlyChannel {
+extension GCDChan: SupportSend {
 	private var handoffToSend: GCDHandoff<Element> {
 		var handoff = GCDHandoff<Element>()
 
@@ -70,7 +72,7 @@ extension GCDChan: SendOnlyChannel {
 	}
 }
 
-extension GCDChan: ReceiveOnlyChannel {
+extension GCDChan: SupportReceive {
 	private var handoffToReceive: GCDHandoff<Element> {
 		var handoff = GCDHandoff<Element>()
 		dispatch_sync(q) {
@@ -95,13 +97,13 @@ extension GCDChan: ReceiveOnlyChannel {
 	}
 }
 
-extension GCDChan: SelectableReceiveChannel {
+extension GCDChan: SupportSelectReceive {
 	public func receive() -> GCDHandoff<Element> {
 		return handoffToReceive
 	}
 }
 
-extension GCDChan: SelectableSendChannel {
+extension GCDChan: SupportSelectSend {
 	public func send() -> GCDHandoff<Element> {
 		return handoffToSend
 	}
