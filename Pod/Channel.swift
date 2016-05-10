@@ -8,13 +8,6 @@
 
 import Foundation
 
-protocol Unique {}
-
-extension Unique {
-	static var newUUID: String { return NSUUID().UUIDString }
-	static var newURI: String  { return "org.eksdyne.\(self.dynamicType)/\(newUUID)" }
-}
-
 // The result of a handoff without access to the value.
 public enum HandoffResult {
 	case Canceled
