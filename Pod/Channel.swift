@@ -8,32 +8,29 @@
 
 import Foundation
 
-public protocol SendChannel {
+public protocol SendOnlyChannel {
 	associatedtype ValueType
 	func send(value: ValueType)
 }
 
-public protocol ReceiveChannel {
+public protocol ReceiveOnlyChannel {
 	associatedtype ValueType
 	func receive() -> ValueType
 }
 
-public struct SendOnlyChan<C: SendChannel>: SendChannel {
-	private let ch: C
-
-	public func send(value: C.ValueType) {
-		ch.send(value)
+extension SendOnlyChannel {
+	public func asSendOnly() -> Self {
+		return self
 	}
 }
 
-public struct ReceiveOnlyChan<C: ReceiveChannel>: ReceiveChannel {
-	private let ch: C
-
-	public func receive() -> C.ValueType {
-		return ch.receive()
+extension ReceiveOnlyChannel {
+	public func asReceiveOnly() -> Self {
+		return self
 	}
 }
 
+typealias RWChannel = protocol<SendOnlyChannel, ReceiveOnlyChannel>
 
 public class GCDChan<Element> {
 	private var waiting = (receivers: [GCDHandoff<Element>](),
@@ -47,7 +44,7 @@ public class GCDChan<Element> {
 	public init() {}
 }
 
-extension GCDChan: SendChannel {
+extension GCDChan: SendOnlyChannel {
 	private var handoffToSend: GCDHandoff<Element> {
 		var handoff = GCDHandoff<Element>()
 
@@ -73,7 +70,7 @@ extension GCDChan: SendChannel {
 	}
 }
 
-extension GCDChan: ReceiveChannel {
+extension GCDChan: ReceiveOnlyChannel {
 	private var handoffToReceive: GCDHandoff<Element> {
 		var handoff = GCDHandoff<Element>()
 		dispatch_sync(q) {
