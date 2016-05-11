@@ -6,8 +6,6 @@ target 'SwiftChan_Example', :exclusive => true do
 end
 
 target 'SwiftChan_Tests', :exclusive => true do
-  pod "SwiftChan", :path => "../"
-
   pod 'Quick'
   pod 'Nimble'
 end
