@@ -11,7 +11,7 @@ import Foundation
 infix operator <- { associativity left }
 
 // Send is safe to use from the main queue
-public func <- <C: SupportSend, V where C.ValueType == V> (ch: C, value: V) {
+public func <- <C: SupportSend> (ch: C, value: C.ValueType) {
 	guard let queue = NSOperationQueue.currentQueue()?.underlyingQueue else {
 		ch.send(value)
 		return
@@ -32,7 +32,7 @@ public func <- <C: SupportSend, V where C.ValueType == V> (ch: C, value: V) {
 	}
 }
 
-public func <- <C: SupportReceive, V where C.ValueType == V> (receiver: ASyncReceive<V>, ch: C) {
+public func <- <C: SupportReceive> (receiver: ASyncReceive<C.ValueType>, ch: C) {
 	let queue = NSOperationQueue.currentQueue()
 	go {
 		let v = ch.receive()
@@ -51,6 +51,6 @@ public func <- <C: SupportReceive, V where C.ValueType == V> (receiver: ASyncRec
 
 prefix operator <- {}
 
-public prefix func <- <C: SupportReceive, V where C.ValueType == V> (ch: C) -> V {
+public prefix func <- <C: SupportReceive> (ch: C) -> C.ValueType {
 	return ch.receive()
 }
